@@ -1,0 +1,11 @@
+{
+  "purple_impact": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "jjk:purple_impact",
+        "stream": false
+      }
+    ]
+  }
+}

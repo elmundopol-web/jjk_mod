@@ -1,0 +1,18 @@
+{
+	"required": true,
+	"package": "com.pop.jjk.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"BlueFirstPersonArmMixin",
+		"BlueFirstPersonTransformMixin",
+		"BluePlayerAnimMixin",
+		"CameraShakeMixin",
+		"GuiHotbarMixin",
+		"KeyboardHandlerMixin",
+		"MinecraftAbilityInputMixin",
+		"MouseHandlerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

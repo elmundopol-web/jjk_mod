@@ -1,0 +1,109 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"invoke": {
+			"animation_length": 0.2917,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, -25, -12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, 25, 12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				}
+			}
+		},
+		"charge_loop": {
+			"loop": true,
+			"animation_length": 0.2917,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, -25, -12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.0833": {
+							"post": [-46, -25, -12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.1667": {
+							"post": [-38, -25, -12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.25": {
+							"post": [-42, -25, -12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, 25, 12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.0833": {
+							"post": [-38, 25, 12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.1667": {
+							"post": [-46, 25, 12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.25": {
+							"post": [-42, 25, 12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				}
+			}
+		},
+		"launch": {
+			"animation_length": 0.2917,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, -25, -12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.0417": {
+							"post": [-15, -25, -12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.1667": {
+							"post": [0, -25, -12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": {
+							"post": [-42, 25, 12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.0417": {
+							"post": [-15, 25, 12],
+							"lerp_mode": "catmullrom"
+						},
+						"0.1667": {
+							"post": [0, 25, 12],
+							"lerp_mode": "catmullrom"
+						}
+					}
+				}
+			}
+		}
+	}
+}

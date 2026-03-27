@@ -1,0 +1,400 @@
+MEGARESUMEN DEL PROYECTO JJK
+Fecha de referencia: 24 de marzo de 2026
+Proyecto: mod "jjk" para Fabric en Minecraft 1.21.11
+Mod ID: jjk
+
+ESTADO GENERAL
+
+- El proyecto compila ahora mismo correctamente.
+- Comprobado con:
+  ./gradlew.bat compileClientJava processResources
+- El mod ya no es una base vacia. Tiene sistema de personajes, hotbar propia, varias tecnicas jugables, renderers propios, mixins de HUD/input y assets visuales rehechos.
+
+ESTRUCTURA GENERAL
+
+- Cliente principal:
+  src/client/java/com/pop/jjk/JJKClientMod.java
+
+- Mod principal:
+  src/main/java/com/pop/jjk/JJKMod.java
+
+- Roster de personajes y tecnicas:
+  src/main/java/com/pop/jjk/JJKRoster.java
+
+- Selector de personaje:
+  src/client/java/com/pop/jjk/CharacterSelectionScreen.java
+
+- Dossier del personaje:
+  src/client/java/com/pop/jjk/CharacterInfoScreen.java
+
+- Hotbar del mod:
+  src/client/java/com/pop/jjk/AbilityHotbarOverlay.java
+
+- Iconos de habilidades:
+  src/client/java/com/pop/jjk/AbilityIconRenderer.java
+
+SISTEMA DE PERSONAJES
+
+- Al entrar a un mundo por primera vez, si no hay personaje elegido, aparece el selector.
+- La eleccion del personaje se guarda en servidor usando tags del jugador.
+- La sincronizacion cliente-servidor del personaje funciona.
+
+ARCHIVOS IMPORTANTES DEL SISTEMA DE PERSONAJE
+
+- src/main/java/com/pop/jjk/CharacterSelectionHandler.java
+- src/main/java/com/pop/jjk/CharacterSelectionPayload.java
+- src/main/java/com/pop/jjk/CharacterStatePayload.java
+- src/client/java/com/pop/jjk/CharacterSelectionScreen.java
+
+PERSONAJES CARGADOS EN EL ROSTER
+
+- Gojo
+- Itadori
+- Sukuna
+- Megumi
+- Todo
+
+ESTADO DE CADA PERSONAJE
+
+GOJO
+- Es el personaje mas desarrollado del proyecto.
+- Tiene soporte de Infinito como pasiva separada.
+- Su hotbar actual real usa:
+  1. Azul
+  2. Rojo
+  3. Morado
+  4. Infinito
+
+ITADORI
+- Ya no esta vacio.
+- Tiene Diverging Fist implementado y usable.
+- Black Flash y Rush Combo siguen definidos pero no implementados.
+
+SUKUNA
+- Tiene roster y textos base.
+- Dismantle, Cleave y Malevolent Shrine aun no estan implementadas.
+
+MEGUMI
+- Tiene roster y textos base.
+- Divine Dog, Nue y Max Elephant aun no estan implementadas.
+
+TODO
+- Tiene roster y textos base.
+- Boogie Woogie y Close Quarters aun no estan implementadas.
+
+HOTBAR DE HABILIDADES
+
+- Ya no se usa un menu clasico para combatir.
+- La tecla R activa o desactiva una hotbar propia del mod.
+- Mientras la hotbar del mod esta visible:
+  - la hotbar vanilla se oculta
+  - la rueda del raton cambia habilidad
+  - los numeros 1-9 tambien se capturan
+  - clic izquierdo usa la habilidad seleccionada
+  - la hotbar/item vanilla queda bloqueada
+  - no se pueden colocar bloques ni usar objetos normales
+
+ESTADO VISUAL DE LA HOTBAR
+
+- Tiene tamano parecido a la hotbar vanilla.
+- Tiene 9 slots totales.
+- Los 4 primeros slots son habilidades reales.
+- Los otros 5 quedan como slots vacios/decorativos.
+- Tiene iconos custom para Azul, Rojo, Morado, Infinito y Flash Step.
+
+ARCHIVOS IMPORTANTES DE LA HOTBAR Y EL INPUT
+
+- src/client/java/com/pop/jjk/AbilityHotbarOverlay.java
+- src/client/java/com/pop/jjk/AbilityIconRenderer.java
+- src/client/java/com/pop/jjk/JJKClientMod.java
+- src/client/java/com/pop/jjk/mixin/client/GuiHotbarMixin.java
+- src/client/java/com/pop/jjk/mixin/client/KeyboardHandlerMixin.java
+- src/client/java/com/pop/jjk/mixin/client/MinecraftAbilityInputMixin.java
+- src/client/java/com/pop/jjk/mixin/client/MouseHandlerMixin.java
+- src/client/resources/jjk.client.mixins.json
+
+TECLA V: DOSSIER DEL PERSONAJE
+
+- La tecla V abre un dossier del personaje actual.
+- El dossier ya enseña:
+  - nombre del personaje
+  - descripcion del personaje
+  - tarjetas de habilidades
+  - descripcion de cada habilidad
+  - uso de cada habilidad
+  - estado de si esta implementada o no
+
+ARCHIVO DEL DOSSIER
+
+- src/client/java/com/pop/jjk/CharacterInfoScreen.java
+
+TECNICAS IMPLEMENTADAS DE VERDAD
+
+AZUL
+- Funciona.
+- Ya no es la version simple inicial.
+- Flujo actual:
+  - se selecciona en la hotbar
+  - se mantiene clic derecho
+  - aparece una esfera azul orbitando al jugador
+  - cuanto mas tiempo se mantiene, mas carga
+  - atrae mobs
+  - atrae objetos del suelo
+  - rompe bloques blandos
+  - los bloques absorbidos ya no usan FallingBlockEntity, sino BlockDisplay
+  - los bloques quedan orbitando alrededor del Azul
+  - al soltar, Azul se lanza
+  - si se mantiene demasiado tiempo, entra en sobrecarga y se dispara solo
+
+- Estado tecnico de Azul:
+  - muy avanzado
+  - base de fisica bastante mas profesional que antes
+  - usa entidad visual propia
+  - tiene cooldown compartido con otras tecnicas fuertes de Gojo
+
+- Archivo principal:
+  src/main/java/com/pop/jjk/BlueTechniqueHandler.java
+
+- Entidad visual:
+  src/main/java/com/pop/jjk/BlueOrbEntity.java
+
+- Renderer:
+  src/client/java/com/pop/jjk/BlueOrbRenderer.java
+
+- Nota importante:
+  El metodo de particulas de Azul ahora mismo esta vacio:
+  spawnBlueParticles(...)
+  Se vacio para poder juzgar mejor la bola azul sin ruido visual.
+
+ROJO
+- Funciona.
+- Es un proyectil real.
+- Hace dano.
+- Rompe bloques blandos.
+- Tiene renderer propio.
+- Usa animacion por frames.
+
+- Archivo handler:
+  src/main/java/com/pop/jjk/RedTechniqueHandler.java
+
+- Entidad:
+  src/main/java/com/pop/jjk/RedProjectileEntity.java
+
+- Renderer:
+  src/client/java/com/pop/jjk/RedProjectileRenderer.java
+
+MORADO
+- Funciona.
+- Ya existe como tecnica propia de Gojo.
+- Flujo actual:
+  - se selecciona en la hotbar
+  - clic izquierdo inicia la fusion
+  - aparece fase de fusion delante del jugador
+  - despues sale disparado hacia delante
+  - destruye bloques a lo largo del recorrido
+  - hace dano masivo practicamente letal
+  - hace una explosion final grande
+
+- Estado tecnico:
+  - funcional
+  - usa entidad propia
+  - usa renderer propio
+  - ya usa 8 frames morados renderizados desde Blender
+
+- Handler:
+  src/main/java/com/pop/jjk/PurpleTechniqueHandler.java
+
+- Entidad:
+  src/main/java/com/pop/jjk/PurpleProjectileEntity.java
+
+- Renderer:
+  src/client/java/com/pop/jjk/PurpleProjectileRenderer.java
+
+INFINITO
+- Funciona como pasiva separada.
+- Puede estar activo mientras Gojo usa otras tecnicas.
+- Repele mobs.
+- Frena/protege contra proyectiles.
+- Tiene bloqueo de dano en servidor.
+- Esta basado en el volumen del jugador y barreras alrededor del cuerpo.
+
+- Archivo principal:
+  src/main/java/com/pop/jjk/InfinityTechniqueHandler.java
+
+DIVERGING FIST
+- Implementado para Itadori.
+- Hace golpe inicial.
+- Luego deja un segundo impacto retrasado.
+- Tiene cooldown propio.
+
+- Archivo principal:
+  src/main/java/com/pop/jjk/DivergingFistTechniqueHandler.java
+
+TECNICAS DEFINIDAS PERO NO IMPLEMENTADAS
+
+- Flash Step
+- Black Flash
+- Rush Combo
+- Dismantle
+- Cleave
+- Malevolent Shrine
+- Divine Dog
+- Nue
+- Max Elephant
+- Boogie Woogie
+- Close Quarters
+
+COOLDOWNS Y COMANDOS
+
+- Hay comandos de prueba:
+  /jjk nocooldown
+  /jjk clearcooldown
+
+- Archivo:
+  src/main/java/com/pop/jjk/JJKCommands.java
+
+- Nota:
+  Aunque el texto de los comandos esta pensado alrededor de Azul, Rojo y Morado usan el mismo sistema base de cooldown de Gojo en varios puntos.
+
+ESTADO VISUAL Y ASSETS
+
+TEXTURAS ACTIVAS IMPORTANTES
+
+- Azul:
+  src/main/resources/assets/jjk/textures/entity/blue_orb.png
+
+- Rojo:
+  src/main/resources/assets/jjk/textures/entity/red_orb.png
+  src/main/resources/assets/jjk/textures/entity/red_orb_0.png
+  src/main/resources/assets/jjk/textures/entity/red_orb_1.png
+  src/main/resources/assets/jjk/textures/entity/red_orb_2.png
+  src/main/resources/assets/jjk/textures/entity/red_orb_3.png
+
+- Morado:
+  src/main/resources/assets/jjk/textures/entity/purple_orb.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_0.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_1.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_2.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_3.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_4.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_5.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_6.png
+  src/main/resources/assets/jjk/textures/entity/purple_frame_7.png
+
+COPIAS DE SEGURIDAD DE TEXTURAS
+
+- src/main/resources/assets/jjk/textures/entity/blue_orb.backup.png
+- src/main/resources/assets/jjk/textures/entity/red_orb_0.backup.png
+- src/main/resources/assets/jjk/textures/entity/red_orb_1.backup.png
+- src/main/resources/assets/jjk/textures/entity/red_orb_2.backup.png
+- src/main/resources/assets/jjk/textures/entity/red_orb_3.backup.png
+- src/main/resources/assets/jjk/textures/entity/purple_orb.backup.png
+
+RENDERS DE USUARIO AUN PRESENTES EN CARPETA
+
+- src/main/resources/assets/jjk/textures/entity/Azul-render.png
+- src/main/resources/assets/jjk/textures/entity/Rojo-render.png
+- src/main/resources/assets/jjk/textures/entity/Sin_nombre.png
+
+BLENDER
+
+- Ya existen scripts de Blender en el proyecto:
+  tools/blender/purple_orb_setup.py
+  tools/blender/render_purple_8frames.py
+
+- El pipeline visual actual ya ha usado Blender para sacar mejores sprites/renders.
+- Morado ya usa frames renderizados externamente en vez de un sprite unico fijo.
+
+ESTADO VISUAL REAL DEL MOD
+
+- Ha mejorado bastante respecto al inicio.
+- Aun sigue siendo sobre todo 2.5D:
+  - planos cruzados
+  - sprites con glow
+  - texturas animadas por frames
+- Todavia no hay esfera 3D real dentro de Minecraft para estas tecnicas.
+
+OVERLAYS SECUNDARIOS
+
+- Existe overlay de vida del enemigo al mirarlo.
+- Archivo:
+  src/client/java/com/pop/jjk/EnemyHealthOverlay.java
+
+TEXTOS Y LOCALIZACION
+
+- Archivos de idioma:
+  src/main/resources/assets/jjk/lang/es_es.json
+  src/main/resources/assets/jjk/lang/en_us.json
+
+- Hay mucho texto ya escrito para:
+  - personajes
+  - tecnicas
+  - HUD
+  - mensajes
+
+- Problema actual:
+  hay textos con encoding roto/mojibake en espanol.
+  Ejemplos:
+  - mantÃ©n
+  - daÃ±a
+
+- Eso conviene arreglar pronto si se va a seguir puliendo la presentacion.
+
+ESTADO ACTUAL HONESTO
+
+LO QUE ESTA YA BASTANTE BASE
+- selector de personaje
+- hotbar propia del mod
+- captura de input por rueda y numeros
+- bloqueo de hotbar vanilla
+- dossier de personaje
+- Gojo como personaje jugable serio
+- Azul funcional y avanzada
+- Rojo funcional
+- Morado funcional
+- Infinito funcional
+- Diverging Fist funcional
+- pipeline visual con assets propios y Blender
+
+LO QUE SIGUE VERDE O A MEDIAS
+- muchas tecnicas de personajes distintos a Gojo
+- mejora visual adicional de Azul y Rojo al nivel de Morado
+- limpiar encoding de textos
+- pulido visual general del dossier y HUD
+- pasar de 2.5D a algo mas cercano a 3D real si se quiere subir mucho el acabado
+
+ACUERDO DE TRABAJO ACTUAL
+
+- A partir de este punto, esta instancia de IA queda enfocada solo a:
+  - animacion
+  - sprites
+  - texturas
+  - Blender
+  - HUD visual
+  - renders
+  - diseno visual general
+
+- La logica de habilidades y gameplay se va a llevar con otra IA, salvo que el usuario vuelva a pedir explicitamente tocar esa parte.
+
+ARCHIVOS MAS IMPORTANTES DEL PROYECTO AHORA MISMO
+
+- src/main/java/com/pop/jjk/JJKMod.java
+- src/client/java/com/pop/jjk/JJKClientMod.java
+- src/main/java/com/pop/jjk/JJKRoster.java
+- src/client/java/com/pop/jjk/AbilityHotbarOverlay.java
+- src/client/java/com/pop/jjk/AbilityIconRenderer.java
+- src/client/java/com/pop/jjk/CharacterSelectionScreen.java
+- src/client/java/com/pop/jjk/CharacterInfoScreen.java
+- src/main/java/com/pop/jjk/BlueTechniqueHandler.java
+- src/client/java/com/pop/jjk/BlueOrbRenderer.java
+- src/main/java/com/pop/jjk/RedTechniqueHandler.java
+- src/client/java/com/pop/jjk/RedProjectileRenderer.java
+- src/main/java/com/pop/jjk/PurpleTechniqueHandler.java
+- src/main/java/com/pop/jjk/PurpleProjectileEntity.java
+- src/client/java/com/pop/jjk/PurpleProjectileRenderer.java
+- src/main/java/com/pop/jjk/InfinityTechniqueHandler.java
+- src/main/java/com/pop/jjk/DivergingFistTechniqueHandler.java
+- src/main/resources/assets/jjk/lang/es_es.json
+- src/main/resources/assets/jjk/lang/en_us.json
+
+FIN DEL MEGARESUMEN
