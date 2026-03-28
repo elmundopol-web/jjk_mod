@@ -95,7 +95,9 @@
   "technique.jjk.close_quarters": "Close Quarters",
   "technique.jjk.close_quarters_desc": "Presion fisica contundente a corta distancia con enfoque directo.",
   "technique.jjk.close_quarters_hint": "Aun no esta implementada.",
-  "technique.jjk.infinite_domain": "Dominio infinito",
+  "technique.jjk.infinite_domain": "Vacio infinito",
+  "technique.jjk.infinite_domain_desc": "Expansion de dominio fija de 20 bloques que inmoviliza a los mobs atrapados dentro y aumenta un 50% el dano que Gojo inflige en el area.",
+  "technique.jjk.infinite_domain_hint": "Selecciona Vacio Infinito en la hotbar y usa clic izquierdo para desplegar un dominio estatico alrededor de tu posicion actual.",
   "message.jjk.technique_selected": "Tecnica seleccionada: %s",
   "message.jjk.active_technique_selected": "Tecnica activa equipada: %s",
   "message.jjk.character_selected": "Personaje equipado: %s",
@@ -120,5 +122,9 @@
   "message.jjk.infinity_unavailable": "Este personaje no puede usar Infinito",
   "message.jjk.infinity_active": "Infinito activo",
   "message.jjk.infinity_no_energy": "Infinito desactivado: sin energia maldita",
+  "message.jjk.infinite_domain_cast": "Expansion de dominio: Vacio Infinito",
+  "message.jjk.infinite_domain_cooldown": "Vacio Infinito en enfriamiento: %s s",
+  "message.jjk.infinite_domain_active": "Tu dominio ya esta activo",
+  "message.jjk.infinite_domain_end": "Vacio Infinito se desvanece",
   "message.jjk.not_enough_energy": "No tienes suficiente energia maldita"
 }

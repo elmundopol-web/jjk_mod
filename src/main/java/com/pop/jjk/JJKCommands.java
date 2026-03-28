@@ -30,9 +30,10 @@ public final class JJKCommands {
         boolean enabled = BlueTechniqueHandler.toggleNoCooldown(player);
 
         if (enabled) {
-            source.sendSuccess(() -> Component.literal("Cooldown de Azul desactivado para ti."), false);
+            InfiniteDomainTechniqueHandler.clearCooldown(player);
+            source.sendSuccess(() -> Component.literal("Cooldowns de Gojo desactivados para ti."), false);
         } else {
-            source.sendSuccess(() -> Component.literal("Cooldown de Azul reactivado."), false);
+            source.sendSuccess(() -> Component.literal("Cooldowns de Gojo reactivados."), false);
         }
 
         return 1;
@@ -41,7 +42,8 @@ public final class JJKCommands {
     private static int clearCooldown(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         BlueTechniqueHandler.clearCooldown(player);
-        source.sendSuccess(() -> Component.literal("Cooldown de Azul limpiado."), false);
+        InfiniteDomainTechniqueHandler.clearCooldown(player);
+        source.sendSuccess(() -> Component.literal("Cooldowns de Gojo limpiados."), false);
         return 1;
     }
 

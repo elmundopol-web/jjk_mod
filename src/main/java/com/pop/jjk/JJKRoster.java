@@ -14,6 +14,7 @@ public final class JJKRoster {
         registerTechnique("blue", "technique.jjk.blue", "technique.jjk.blue_desc", "technique.jjk.blue_hint", 0x3FA7FF, true);
         registerTechnique("red", "technique.jjk.red", "technique.jjk.red_desc", "technique.jjk.red_hint", 0xFF553D, true);
         registerTechnique("purple", "technique.jjk.purple", "technique.jjk.purple_desc", "technique.jjk.purple_hint", 0xB66CFF, true);
+        registerTechnique("infinite_domain", "technique.jjk.infinite_domain", "technique.jjk.infinite_domain_desc", "technique.jjk.infinite_domain_hint", 0x101820, true);
         registerTechnique("infinity", "technique.jjk.infinity", "technique.jjk.infinity_desc", "technique.jjk.infinity_hint", 0xCCF0FF, true);
         registerTechnique("flash_step", "technique.jjk.flash_step", "technique.jjk.flash_step_desc", "technique.jjk.flash_step_hint", 0xF4F1B5, false);
         registerTechnique("diverging_fist", "technique.jjk.diverging_fist", "technique.jjk.diverging_fist_desc", "technique.jjk.diverging_fist_hint", 0xE7A95F, true);
@@ -28,7 +29,7 @@ public final class JJKRoster {
         registerTechnique("boogie_woogie", "technique.jjk.boogie_woogie", "technique.jjk.boogie_woogie_desc", "technique.jjk.boogie_woogie_hint", 0xA76B3F, false);
         registerTechnique("close_quarters", "technique.jjk.close_quarters", "technique.jjk.close_quarters_desc", "technique.jjk.close_quarters_hint", 0xD79A61, false);
 
-        registerCharacter("gojo", "character.jjk.gojo", "character.jjk.gojo_desc", 0x9EEBFF, List.of("blue", "red", "purple", "infinity"), true);
+        registerCharacter("gojo", "character.jjk.gojo", "character.jjk.gojo_desc", 0x9EEBFF, List.of("blue", "red", "purple", "infinite_domain", "infinity"), true);
         registerCharacter("itadori", "character.jjk.itadori", "character.jjk.itadori_desc", 0xE78C5A, List.of("diverging_fist", "black_flash", "rush_combo"), false);
         registerCharacter("sukuna", "character.jjk.sukuna", "character.jjk.sukuna_desc", 0xC44E4E, List.of("dismantle", "cleave", "malevolent_shrine"), false);
         registerCharacter("megumi", "character.jjk.megumi", "character.jjk.megumi_desc", 0x6A84C8, List.of("divine_dog", "nue", "max_elephant"), false);

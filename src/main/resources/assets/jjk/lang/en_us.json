@@ -95,7 +95,9 @@
   "technique.jjk.close_quarters": "Close Quarters",
   "technique.jjk.close_quarters_desc": "Heavy close-range pressure with a straightforward physical style.",
   "technique.jjk.close_quarters_hint": "Not implemented yet.",
-  "technique.jjk.infinite_domain": "Infinite Domain",
+  "technique.jjk.infinite_domain": "Unlimited Void",
+  "technique.jjk.infinite_domain_desc": "A fixed 20-block domain expansion that paralyzes mobs trapped inside and increases Gojo's damage by 50% within the area.",
+  "technique.jjk.infinite_domain_hint": "Select Unlimited Void on the hotbar and left click to deploy a static domain around your current position.",
   "message.jjk.technique_selected": "Selected technique: %s",
   "message.jjk.active_technique_selected": "Equipped active technique: %s",
   "message.jjk.character_selected": "Equipped character: %s",
@@ -120,5 +122,9 @@
   "message.jjk.infinity_unavailable": "This character cannot use Infinity",
   "message.jjk.infinity_active": "Infinity active",
   "message.jjk.infinity_no_energy": "Infinity disabled: out of cursed energy",
+  "message.jjk.infinite_domain_cast": "Domain Expansion: Unlimited Void",
+  "message.jjk.infinite_domain_cooldown": "Unlimited Void cooldown: %s s",
+  "message.jjk.infinite_domain_active": "Your domain is already active",
+  "message.jjk.infinite_domain_end": "Unlimited Void fades away",
   "message.jjk.not_enough_energy": "Not enough cursed energy"
 }

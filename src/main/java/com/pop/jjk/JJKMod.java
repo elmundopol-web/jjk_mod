@@ -63,6 +63,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(BlueTechniqueUsePayload.TYPE, BlueTechniqueUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(RedTechniqueUsePayload.TYPE, RedTechniqueUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(PurpleTechniqueUsePayload.TYPE, PurpleTechniqueUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(InfiniteDomainUsePayload.TYPE, InfiniteDomainUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DivergingFistUsePayload.TYPE, DivergingFistUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
@@ -71,6 +72,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(CooldownSyncPayload.TYPE, CooldownSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(ScreenShakePayload.TYPE, ScreenShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(BlueAnimSyncPayload.TYPE, BlueAnimSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(InfiniteDomainSyncPayload.TYPE, InfiniteDomainSyncPayload.STREAM_CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BlueTechniqueUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> {
                 if (payload.holding()) {
@@ -84,6 +86,9 @@ public class JJKMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(PurpleTechniqueUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> PurpleTechniqueHandler.activate(context.player()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(InfiniteDomainUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> InfiniteDomainTechniqueHandler.activate(context.player()))
+        );
         ServerPlayNetworking.registerGlobalReceiver(DivergingFistUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> DivergingFistTechniqueHandler.activate(context.player()))
         );
@@ -96,14 +101,18 @@ public class JJKMod implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             CharacterSelectionHandler.syncCharacterToClient(handler.player);
             CursedEnergyManager.onPlayerJoin(handler.player);
+            InfiniteDomainTechniqueHandler.syncActiveDomainsToPlayer(handler.player);
         });
         JJKCommands.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(InfinityTechniqueHandler::allowDamage);
+        ServerLivingEntityEvents.AFTER_DAMAGE.register(InfiniteDomainTechniqueHandler::afterDamage);
         ServerTickEvents.END_SERVER_TICK.register(server -> BlueTechniqueHandler.tickActive(server));
+        ServerTickEvents.END_SERVER_TICK.register(server -> InfiniteDomainTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> DivergingFistTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> InfinityTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlueTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfiniteDomainTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DivergingFistTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());

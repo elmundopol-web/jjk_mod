@@ -138,7 +138,11 @@ public class JJKClientMod implements ClientModInitializer {
                 }
             })
         );
+        ClientPlayNetworking.registerGlobalReceiver(InfiniteDomainSyncPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> InfiniteDomainOverlay.handleSync(payload))
+        );
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetClientState());
+        HudRenderCallback.EVENT.register(InfiniteDomainOverlay::render);
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
         HudRenderCallback.EVENT.register(CursedEnergyOverlay::render);
@@ -146,6 +150,7 @@ public class JJKClientMod implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ScreenShakeManager.tick();
             com.pop.jjk.particle.effect.ParticleEffectManager.tick();
+            InfiniteDomainOverlay.tick(client);
             EnemyHealthOverlay.tick(client);
 
             // Tick Blue animation states
@@ -605,6 +610,12 @@ public class JJKClientMod implements ClientModInitializer {
             return;
         }
 
+        if ("infinite_domain".equals(tecnicaId)) {
+            ClientPlayNetworking.send(InfiniteDomainUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
         if ("diverging_fist".equals(tecnicaId)) {
             ClientPlayNetworking.send(DivergingFistUsePayload.INSTANCE);
             enfriamientoUsoTicks = USE_BUFFER_TICKS;
@@ -638,6 +649,7 @@ public class JJKClientMod implements ClientModInitializer {
         infinitoActivo = false;
         enfriamientoUsoTicks = 0;
         blueAnimStates.clear();
+        InfiniteDomainOverlay.clear();
         com.pop.jjk.particle.effect.ParticleEffectManager.clear();
     }
 
