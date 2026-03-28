@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -20,6 +21,9 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -27,10 +31,15 @@ public final class InfiniteDomainTechniqueHandler {
 
     private static final int DOMAIN_ENERGY_COST = 600;
     private static final int DOMAIN_DURATION_TICKS = 20 * 12;
+    private static final int DOMAIN_BUILDUP_TICKS = 20;
     private static final int DOMAIN_COOLDOWN_TICKS = 20 * 60;
     private static final double DOMAIN_RADIUS = 20.0;
     private static final double DOMAIN_RADIUS_SQR = DOMAIN_RADIUS * DOMAIN_RADIUS;
+    private static final int DOMAIN_RADIUS_BLOCKS = 20;
+    private static final int DOMAIN_FLOOR_OFFSET = -1;
+    private static final int DOMAIN_CEILING_OFFSET = 12;
     private static final float DOMAIN_DAMAGE_BONUS_MULTIPLIER = 0.5F;
+    private static final BlockState DOMAIN_SHELL_BLOCK = Blocks.BLACK_CONCRETE.defaultBlockState();
 
     private static final Map<UUID, ActiveDomain> ACTIVE_DOMAINS = new HashMap<>();
     private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
@@ -72,7 +81,8 @@ public final class InfiniteDomainTechniqueHandler {
 
         ServerLevel level = (ServerLevel) player.level();
         Vec3 center = getEntityCenter(player);
-        ActiveDomain domain = new ActiveDomain(playerId, player.getId(), level, center, DOMAIN_DURATION_TICKS);
+        ActiveDomain domain = new ActiveDomain(playerId, player.getId(), level, center, player.blockPosition(), DOMAIN_DURATION_TICKS);
+        initializeDomainShell(domain);
         ACTIVE_DOMAINS.put(playerId, domain);
         if (!noCooldown) {
             COOLDOWNS.put(playerId, DOMAIN_COOLDOWN_TICKS);
@@ -101,11 +111,15 @@ public final class InfiniteDomainTechniqueHandler {
             ServerPlayer owner = server.getPlayerList().getPlayer(entry.getKey());
 
             if (owner == null || !owner.isAlive() || owner.level() != domain.level) {
+                restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
                 iterator.remove();
                 continue;
             }
 
+            domain.ageTicks++;
+            advanceDomainWall(domain);
+            enforceDomainBoundary(domain);
             domain.remainingTicks--;
             applyDomainParalysis(domain, paralyzedThisTick);
             spawnAmbientParticles(domain);
@@ -116,6 +130,7 @@ public final class InfiniteDomainTechniqueHandler {
 
             if (domain.remainingTicks <= 0) {
                 owner.displayClientMessage(Component.translatable("message.jjk.infinite_domain_end"), true);
+                restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
                 iterator.remove();
             }
@@ -162,6 +177,10 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     public static void clearAll() {
+        for (ActiveDomain domain : ACTIVE_DOMAINS.values()) {
+            restoreDomainShell(domain);
+        }
+
         ACTIVE_DOMAINS.clear();
         COOLDOWNS.clear();
         BONUS_DAMAGE_GUARD.clear();
@@ -245,11 +264,143 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static boolean isInsideDomain(LivingEntity entity, ActiveDomain domain) {
-        return getEntityCenter(entity).distanceToSqr(domain.center) <= DOMAIN_RADIUS_SQR;
+        Vec3 entityCenter = getEntityCenter(entity);
+        if (entityCenter.y < domain.floorY || entityCenter.y > domain.ceilingY + 1.0D) {
+            return false;
+        }
+
+        double dx = entityCenter.x - domain.center.x;
+        double dz = entityCenter.z - domain.center.z;
+        return (dx * dx) + (dz * dz) <= DOMAIN_RADIUS_SQR;
     }
 
     private static Vec3 getEntityCenter(LivingEntity entity) {
         return entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+    }
+
+    private static void initializeDomainShell(ActiveDomain domain) {
+        buildFloorAndCeiling(domain);
+    }
+
+    private static void buildFloorAndCeiling(ActiveDomain domain) {
+        int radiusSq = DOMAIN_RADIUS_BLOCKS * DOMAIN_RADIUS_BLOCKS;
+
+        for (int x = -DOMAIN_RADIUS_BLOCKS; x <= DOMAIN_RADIUS_BLOCKS; x++) {
+            for (int z = -DOMAIN_RADIUS_BLOCKS; z <= DOMAIN_RADIUS_BLOCKS; z++) {
+                if ((x * x) + (z * z) > radiusSq) {
+                    continue;
+                }
+
+                placeDomainBlock(domain, new BlockPos(domain.centerBlockX + x, domain.floorY, domain.centerBlockZ + z));
+                placeDomainBlock(domain, new BlockPos(domain.centerBlockX + x, domain.ceilingY, domain.centerBlockZ + z));
+            }
+        }
+    }
+
+    private static void advanceDomainWall(ActiveDomain domain) {
+        int fullWallHeight = Math.max(0, domain.ceilingY - domain.floorY - 1);
+        if (fullWallHeight <= 0) {
+            return;
+        }
+
+        int targetWallLayers = Math.min(
+            fullWallHeight,
+            (int) Math.ceil((Math.min(domain.ageTicks, DOMAIN_BUILDUP_TICKS) / (double) DOMAIN_BUILDUP_TICKS) * fullWallHeight)
+        );
+
+        while (domain.builtWallLayers < targetWallLayers) {
+            domain.builtWallLayers++;
+            buildWallLayer(domain, domain.floorY + domain.builtWallLayers);
+        }
+    }
+
+    private static void buildWallLayer(ActiveDomain domain, int y) {
+        int outerSq = DOMAIN_RADIUS_BLOCKS * DOMAIN_RADIUS_BLOCKS;
+        int innerSq = (DOMAIN_RADIUS_BLOCKS - 1) * (DOMAIN_RADIUS_BLOCKS - 1);
+
+        for (int x = -DOMAIN_RADIUS_BLOCKS; x <= DOMAIN_RADIUS_BLOCKS; x++) {
+            for (int z = -DOMAIN_RADIUS_BLOCKS; z <= DOMAIN_RADIUS_BLOCKS; z++) {
+                int distSq = (x * x) + (z * z);
+                if (distSq > outerSq || distSq < innerSq) {
+                    continue;
+                }
+
+                placeDomainBlock(domain, new BlockPos(domain.centerBlockX + x, y, domain.centerBlockZ + z));
+            }
+        }
+    }
+
+    private static void placeDomainBlock(ActiveDomain domain, BlockPos pos) {
+        BlockPos immutablePos = pos.immutable();
+        if (domain.originalBlocks.containsKey(immutablePos)) {
+            return;
+        }
+
+        BlockState currentState = domain.level.getBlockState(immutablePos);
+        if (domain.level.getBlockEntity(immutablePos) != null) {
+            return;
+        }
+
+        float hardness = currentState.getDestroySpeed(domain.level, immutablePos);
+        if (hardness < 0.0F) {
+            return;
+        }
+
+        domain.originalBlocks.put(immutablePos, currentState);
+        domain.level.setBlock(immutablePos, DOMAIN_SHELL_BLOCK, 3);
+    }
+
+    private static void restoreDomainShell(ActiveDomain domain) {
+        for (Map.Entry<BlockPos, BlockState> entry : domain.originalBlocks.entrySet()) {
+            domain.level.setBlock(entry.getKey(), entry.getValue(), 3);
+        }
+        domain.originalBlocks.clear();
+    }
+
+    private static void enforceDomainBoundary(ActiveDomain domain) {
+        AABB barrierArea = new AABB(
+            domain.center.x - DOMAIN_RADIUS - 2.0D,
+            domain.floorY - 1.0D,
+            domain.center.z - DOMAIN_RADIUS - 2.0D,
+            domain.center.x + DOMAIN_RADIUS + 2.0D,
+            domain.ceilingY + 2.0D,
+            domain.center.z + DOMAIN_RADIUS + 2.0D
+        );
+
+        for (LivingEntity entity : domain.level.getEntitiesOfClass(LivingEntity.class, barrierArea, LivingEntity::isAlive)) {
+            if (entity instanceof ServerPlayer player && player.isSpectator()) {
+                continue;
+            }
+
+            AABB entityBox = entity.getBoundingBox();
+            if (entityBox.maxY < domain.floorY || entityBox.minY > domain.ceilingY + 1.0D) {
+                continue;
+            }
+
+            double dx = entity.getX() - domain.center.x;
+            double dz = entity.getZ() - domain.center.z;
+            double horizontalDistanceSqr = (dx * dx) + (dz * dz);
+            double horizontalDistance = Math.sqrt(Math.max(horizontalDistanceSqr, 1.0E-6D));
+
+            if (horizontalDistance < DOMAIN_RADIUS - 1.2D || horizontalDistance > DOMAIN_RADIUS + 1.8D) {
+                continue;
+            }
+
+            Vec3 direction = horizontalDistance < 1.0E-4D
+                ? new Vec3(1.0D, 0.0D, 0.0D)
+                : new Vec3(dx / horizontalDistance, 0.0D, dz / horizontalDistance);
+            boolean inside = horizontalDistance <= DOMAIN_RADIUS;
+            Vec3 correction = direction.scale(inside ? -0.45D : 0.45D);
+
+            entity.move(MoverType.SELF, correction);
+            entity.setDeltaMovement(entity.getDeltaMovement().scale(0.15D).add(correction.x * 0.7D, 0.03D, correction.z * 0.7D));
+            entity.hurtMarked = true;
+
+            if (entity instanceof Mob mob) {
+                mob.getNavigation().stop();
+                mob.setTarget(null);
+            }
+        }
     }
 
     private static void tickCooldowns(MinecraftServer server) {
@@ -333,14 +484,28 @@ public final class InfiniteDomainTechniqueHandler {
         private final int ownerEntityId;
         private final ServerLevel level;
         private final Vec3 center;
+        private final int centerBlockX;
+        private final int centerBlockZ;
+        private final int floorY;
+        private final int ceilingY;
+        private final Map<BlockPos, BlockState> originalBlocks;
         private int remainingTicks;
+        private int ageTicks;
+        private int builtWallLayers;
 
-        private ActiveDomain(UUID ownerId, int ownerEntityId, ServerLevel level, Vec3 center, int remainingTicks) {
+        private ActiveDomain(UUID ownerId, int ownerEntityId, ServerLevel level, Vec3 center, BlockPos activationPos, int remainingTicks) {
             this.ownerId = ownerId;
             this.ownerEntityId = ownerEntityId;
             this.level = level;
             this.center = center;
+            this.centerBlockX = activationPos.getX();
+            this.centerBlockZ = activationPos.getZ();
+            this.floorY = activationPos.getY() + DOMAIN_FLOOR_OFFSET;
+            this.ceilingY = activationPos.getY() + DOMAIN_CEILING_OFFSET;
+            this.originalBlocks = new HashMap<>();
             this.remainingTicks = remainingTicks;
+            this.ageTicks = 0;
+            this.builtWallLayers = 0;
         }
     }
 

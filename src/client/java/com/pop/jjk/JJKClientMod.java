@@ -142,7 +142,6 @@ public class JJKClientMod implements ClientModInitializer {
             context.client().execute(() -> InfiniteDomainOverlay.handleSync(payload))
         );
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetClientState());
-        HudRenderCallback.EVENT.register(InfiniteDomainOverlay::render);
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
         HudRenderCallback.EVENT.register(CursedEnergyOverlay::render);

@@ -3,6 +3,8 @@
 	"package": "com.pop.jjk.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"InfiniteDomainFogRendererMixin",
+		"InfiniteDomainLevelRendererMixin",
 		"BlueFirstPersonTransformMixin",
 		"BluePlayerAnimMixin",
 		"CameraShakeMixin",
