@@ -152,35 +152,35 @@ public final class BlueAnimationPose {
 
     private static float sampleChargeRightX(float tick) {
         if (tick <= 1.666F) {
-            return lerpDegrees(tick / 1.666F, -42.0F, -46.0F);
+            return catmullRomDegrees(tick / 1.666F, -42.0F, -42.0F, -46.0F, -38.0F);
         }
 
         if (tick <= 3.334F) {
-            return lerpDegrees((tick - 1.666F) / 1.668F, -46.0F, -38.0F);
+            return catmullRomDegrees((tick - 1.666F) / 1.668F, -42.0F, -46.0F, -38.0F, -42.0F);
         }
 
-        return lerpDegrees((tick - 3.334F) / 1.666F, -38.0F, -42.0F);
+        return catmullRomDegrees((tick - 3.334F) / 1.666F, -46.0F, -38.0F, -42.0F, -46.0F);
     }
 
     private static float sampleChargeLeftX(float tick) {
         if (tick <= 1.666F) {
-            return lerpDegrees(tick / 1.666F, -42.0F, -38.0F);
+            return catmullRomDegrees(tick / 1.666F, -42.0F, -42.0F, -38.0F, -46.0F);
         }
 
         if (tick <= 3.334F) {
-            return lerpDegrees((tick - 1.666F) / 1.668F, -38.0F, -46.0F);
+            return catmullRomDegrees((tick - 1.666F) / 1.668F, -42.0F, -38.0F, -46.0F, -42.0F);
         }
 
-        return lerpDegrees((tick - 3.334F) / 1.666F, -46.0F, -42.0F);
+        return catmullRomDegrees((tick - 3.334F) / 1.666F, -38.0F, -46.0F, -42.0F, -38.0F);
     }
 
     private static float sampleLaunchX(float tick) {
         if (tick <= 0.834F) {
-            return lerpDegrees(tick / 0.834F, -42.0F, -15.0F);
+            return catmullRomDegrees(tick / 0.834F, -42.0F, -42.0F, -15.0F, 0.0F);
         }
 
         if (tick <= 3.334F) {
-            return lerpDegrees((tick - 0.834F) / 2.5F, -15.0F, 0.0F);
+            return catmullRomDegrees((tick - 0.834F) / 2.5F, -42.0F, -15.0F, 0.0F, 0.0F);
         }
 
         return 0.0F;
@@ -213,6 +213,18 @@ public final class BlueAnimationPose {
 
     private static float lerpDegrees(float progress, float start, float end) {
         return Mth.lerp(Mth.clamp(progress, 0.0F, 1.0F), start, end);
+    }
+
+    private static float catmullRomDegrees(float progress, float p0, float p1, float p2, float p3) {
+        float t = Mth.clamp(progress, 0.0F, 1.0F);
+        float t2 = t * t;
+        float t3 = t2 * t;
+        return 0.5F * (
+            (2.0F * p1)
+                + (-p0 + p2) * t
+                + (2.0F * p0 - 5.0F * p1 + 4.0F * p2 - p3) * t2
+                + (-p0 + 3.0F * p1 - 3.0F * p2 + p3) * t3
+        );
     }
 
     private static float degreesToRadians(float degrees) {

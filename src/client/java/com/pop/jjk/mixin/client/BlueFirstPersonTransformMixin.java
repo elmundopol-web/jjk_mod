@@ -3,6 +3,7 @@ package com.pop.jjk.mixin.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.pop.jjk.BlueAnimSyncPayload;
 import com.pop.jjk.BlueAnimationPose;
+import com.pop.jjk.BlueAnimRenderState;
 import com.pop.jjk.JJKClientMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -71,7 +72,7 @@ public abstract class BlueFirstPersonTransformMixin {
             armSide == HumanoidArm.RIGHT,
             phase,
             JJKClientMod.getBlueAnimTicksInPhase(player.getId()),
-            0.0F
+            BlueAnimRenderState.lastPartialTick
         );
     }
 }

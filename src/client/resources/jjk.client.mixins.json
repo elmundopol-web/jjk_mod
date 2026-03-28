@@ -3,7 +3,6 @@
 	"package": "com.pop.jjk.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"BlueFirstPersonArmMixin",
 		"BlueFirstPersonTransformMixin",
 		"BluePlayerAnimMixin",
 		"CameraShakeMixin",

@@ -2,6 +2,7 @@ package com.pop.jjk.mixin.client;
 
 import com.pop.jjk.BlueAnimSyncPayload;
 import com.pop.jjk.BlueAnimationPose;
+import com.pop.jjk.BlueAnimRenderState;
 import com.pop.jjk.JJKClientMod;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
@@ -29,6 +30,8 @@ public abstract class BluePlayerAnimMixin {
             return;
         }
 
+        float partialTick = fractionalPart(avatarState.ageInTicks);
+        BlueAnimRenderState.lastPartialTick = partialTick;
         int phase = JJKClientMod.getBlueAnimPhase(avatarState.id);
         if (phase == BlueAnimSyncPayload.PHASE_STOP) {
             return;
@@ -40,7 +43,7 @@ public abstract class BluePlayerAnimMixin {
             this.leftArm,
             phase,
             ticksInPhase,
-            fractionalPart(avatarState.ageInTicks)
+            partialTick
         );
     }
 
