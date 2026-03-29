@@ -121,7 +121,16 @@ public class PiercingBloodProjectileEntity extends Projectile {
         if (this.held) {
             currentSpeed = HELD_SPEED; // constante durante hold
         } else {
-            currentSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY, this.tickCount - 1);
+            // Rampa de aceleración en los 3 primeros ticks (tap / no held)
+            if (this.tickCount == 1) {
+                currentSpeed = INITIAL_SPEED / 2.5;
+            } else if (this.tickCount == 2) {
+                currentSpeed = INITIAL_SPEED / 1.5;
+            } else if (this.tickCount == 3) {
+                currentSpeed = INITIAL_SPEED;
+            } else {
+                currentSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY, this.tickCount - 1);
+            }
             if (currentSpeed <= MIN_SPEED) {
                 if (this.level() instanceof ServerLevel sl) spawnTrailEnd(sl, this.position());
                 this.discard(); return;
@@ -136,17 +145,8 @@ public class PiercingBloodProjectileEntity extends Projectile {
         if (!this.held && remaining <= 0.0) { this.discard(); return; }
 
         double step = this.held ? currentSpeed : Math.min(currentSpeed, remaining);
-        Vec3 prev;
-        Vec3 next;
-        if (this.held && this.getOwner() instanceof ServerPlayer ownerMove) {
-            Vec3 lookDir = ownerMove.getLookAngle().normalize();
-            Vec3 origin  = ownerMove.getEyePosition().add(lookDir.scale(0.55));
-            prev = origin;
-            next = origin.add(currentDir.scale(step));
-        } else {
-            prev = this.position();
-            next = prev.add(currentDir.scale(step));
-        }
+        Vec3 prev = this.position();
+        Vec3 next = prev.add(currentDir.scale(step));
 
         if (!this.held) this.distanceTravelled += step;
         this.setPos(next);
@@ -155,14 +155,18 @@ public class PiercingBloodProjectileEntity extends Projectile {
 
         if (!(this.level() instanceof ServerLevel serverLevel)) return;
 
-        // ── Intensidad global: 1.0 al inicio → 0.0 al final ─────────────────
-        float intensity = (float) Math.max(0.0, 1.0 - (double)(this.tickCount - 1) / MAX_LIFETIME);
+        // ── Intensidad global: 1.0 al inicio → 0.0 al final (tap). En hold es constante.
+        float intensity = this.held
+            ? 1.0F
+            : (float) Math.max(0.0, 1.0 - (double)(this.tickCount - 1) / MAX_LIFETIME);
         float currentDamage = MIN_DAMAGE + (INITIAL_DAMAGE - MIN_DAMAGE) * intensity;
 
         if (this.tickCount == 1) {
             spawnLaunchBurst(serverLevel, prev, currentDir);
         }
 
+        // BUG 1: limpiar la blacklist de entidades golpeadas cada tick en hold
+        if (this.held) this.hitEntityIds.clear();
         hitEntitiesAlongPath(serverLevel, prev, next, currentDir, currentDamage);
         breakBlocksAlongPath(serverLevel, prev, next);
 
