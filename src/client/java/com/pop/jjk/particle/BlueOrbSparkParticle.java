@@ -66,23 +66,23 @@ public final class BlueOrbSparkParticle extends JJKBaseParticle {
         // Frecuencias de turbulencia: altas y variadas entre instancias.
         // Rango 0.8-1.5 rad/tick → movimiento rápido, errático.
         // Cada eje tiene frecuencia diferente → patrón 3D no repetitivo.
-        this.turbFreqX = 0.8F + this.random.nextFloat() * 0.7F;
-        this.turbFreqY = 0.8F + this.random.nextFloat() * 0.7F;
-        this.turbFreqZ = 0.8F + this.random.nextFloat() * 0.7F;
+        this.turbFreqX = 0.2F + this.random.nextFloat() * 0.3F;
+        this.turbFreqY = 0.2F + this.random.nextFloat() * 0.3F;
+        this.turbFreqZ = 0.2F + this.random.nextFloat() * 0.3F;
         this.turbPhase = this.random.nextFloat() * 6.2832F;
 
         // Amplitud de turbulencia: define cuán "salvaje" es esta chispa
-        this.turbAmplitude = 0.015F + this.random.nextFloat() * 0.02F;
+        this.turbAmplitude = 0.004F + this.random.nextFloat() * 0.004F;
 
         // Fuerza de atracción: varía para que algunas caigan rápido y otras orbiten más
-        this.attractStrength = 0.008F + this.random.nextFloat() * 0.012F;
+        this.attractStrength = 0.018F + this.random.nextFloat() * 0.012F;
 
         // Velocidad tangencial inicial (perpendicular al radio → espiral de entrada)
         double dx = vx;
         double dz = vz;
         double dist = Math.sqrt(dx * dx + dz * dz);
         if (dist > 0.01) {
-            float tangent = 0.03F + this.random.nextFloat() * 0.02F;
+            float tangent = 0.015F + this.random.nextFloat() * 0.01F;
             float dir = this.random.nextBoolean() ? 1.0F : -1.0F;
             this.xd = (-dz / dist) * tangent * dir;
             this.zd = (dx / dist) * tangent * dir;

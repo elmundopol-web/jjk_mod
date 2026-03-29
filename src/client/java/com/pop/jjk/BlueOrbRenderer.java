@@ -16,7 +16,7 @@ import net.minecraft.util.Mth;
 
 public class BlueOrbRenderer extends EntityRenderer<BlueOrbEntity, BlueOrbRenderState> {
 
-    private static final int FRAME_COUNT = 3;
+    private static final int FRAME_COUNT = 4;
     private static final int FRAME_TICKS = 3;
     private static final Identifier[] BLUE_TEXTURES = new Identifier[FRAME_COUNT];
     private static final RenderType[] MAIN_RENDER_TYPES = new RenderType[FRAME_COUNT];

@@ -57,6 +57,19 @@ public class JJKMod implements ModInitializer {
             .noLootTable()
             .build(ResourceKey.create(Registries.ENTITY_TYPE, PURPLE_PROJECTILE_ID))
     );
+    public static final Identifier PIERCING_BLOOD_ID = Identifier.fromNamespaceAndPath(MOD_ID, "piercing_blood");
+    public static final EntityType<PiercingBloodProjectileEntity> PIERCING_BLOOD_PROJECTILE = Registry.register(
+        BuiltInRegistries.ENTITY_TYPE,
+        PIERCING_BLOOD_ID,
+        EntityType.Builder.<PiercingBloodProjectileEntity>of(PiercingBloodProjectileEntity::new, MobCategory.MISC)
+            .sized(0.2F, 0.2F)
+            .clientTrackingRange(16)
+            .updateInterval(1)
+            .fireImmune()
+            .noSave()
+            .noLootTable()
+            .build(ResourceKey.create(Registries.ENTITY_TYPE, PIERCING_BLOOD_ID))
+    );
 
     @Override
     public void onInitialize() {
@@ -65,6 +78,10 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(PurpleTechniqueUsePayload.TYPE, PurpleTechniqueUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(InfiniteDomainUsePayload.TYPE, InfiniteDomainUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DivergingFistUsePayload.TYPE, DivergingFistUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(PiercingBloodUsePayload.TYPE, PiercingBloodUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(PiercingBloodHoldPayload.TYPE, PiercingBloodHoldPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(FlowingRedScaleUsePayload.TYPE, FlowingRedScaleUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(SupernovaUsePayload.TYPE, SupernovaUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(CharacterStatePayload.TYPE, CharacterStatePayload.STREAM_CODEC);
@@ -92,6 +109,18 @@ public class JJKMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(DivergingFistUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> DivergingFistTechniqueHandler.activate(context.player()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(PiercingBloodUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> PiercingBloodTechniqueHandler.activate(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(PiercingBloodHoldPayload.TYPE, (payload, context) ->
+            context.server().execute(() -> PiercingBloodTechniqueHandler.onHold(context.player(), payload.holding()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(FlowingRedScaleUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> FlowingRedScaleTechniqueHandler.activate(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(SupernovaUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> SupernovaTechniqueHandler.activate(context.player()))
+        );
         ServerPlayNetworking.registerGlobalReceiver(TechniqueSelectionPayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfinityTechniqueHandler.setInfinityEnabled(context.player(), payload.infinityEnabled()))
         );
@@ -109,11 +138,17 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> BlueTechniqueHandler.tickActive(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> InfiniteDomainTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> DivergingFistTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(server -> PiercingBloodTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(server -> FlowingRedScaleTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(server -> SupernovaTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> InfinityTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlueTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfiniteDomainTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DivergingFistTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> PiercingBloodTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> FlowingRedScaleTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> SupernovaTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());
 

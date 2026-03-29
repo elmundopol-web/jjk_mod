@@ -49,6 +49,7 @@ public class JJKClientMod implements ClientModInitializer {
     private static int selectedAbilityIndex = 0;
     private static boolean infoKeyHeld = false;
     private static boolean blueUseHeld = false;
+    private static boolean piercingUseHeld = false;
     private static String tecnicaActivaId = JJKRoster.NONE;
     private static Component tecnicaActivaNombre = NO_TECHNIQUE_NAME;
     private static boolean infinitoActivo = false;
@@ -79,6 +80,7 @@ public class JJKClientMod implements ClientModInitializer {
         EntityRenderers.register(JJKMod.BLUE_ORB, BlueOrbRenderer::new);
         EntityRenderers.register(JJKMod.RED_PROJECTILE, RedProjectileRenderer::new);
         EntityRenderers.register(JJKMod.PURPLE_PROJECTILE, PurpleProjectileRenderer::new);
+        EntityRenderers.register(JJKMod.PIERCING_BLOOD_PROJECTILE, PiercingBloodRenderer::new);
 
         ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ENERGY,
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueEnergyParticle::new));
@@ -174,6 +176,7 @@ public class JJKClientMod implements ClientModInitializer {
             infoKeyHeld = infoDown;
 
             handleBlueHoldInput(client);
+            handlePiercingHoldInput(client);
         });
     }
 
@@ -387,6 +390,11 @@ public class JJKClientMod implements ClientModInitializer {
             return true;
         }
 
+        if ("piercing_blood".equals(entry.id())) {
+            // Se maneja por input sostenido en handlePiercingHoldInput
+            return true;
+        }
+
         activarTecnicaDesdeHotbar(entry.id(), client);
         return true;
     }
@@ -451,6 +459,37 @@ public class JJKClientMod implements ClientModInitializer {
         }
 
         blueUseHeld = useDown;
+    }
+
+    private static void handlePiercingHoldInput(Minecraft client) {
+        boolean canInteract = client.player != null && client.screen == null;
+        AbilityHotbarEntry entry = getSelectedAbilityEntry();
+        boolean isSelectedPiercing = entry != null && "piercing_blood".equals(entry.id());
+        boolean hasPiercingInRoster = JJKRoster.techniquesForCharacter(characterId).stream()
+            .anyMatch(t -> t.id().equals("piercing_blood"));
+        boolean isActivePiercing = "piercing_blood".equals(tecnicaActivaId) || isSelectedPiercing || hasPiercingInRoster;
+        boolean inputDown = client.options.keyUse.isDown() || client.options.keyAttack.isDown();
+        boolean useDown = canInteract && isActivePiercing && inputDown;
+
+        if (useDown && !piercingUseHeld) {
+            // Asegurar estado activo localmente si el roster incluye Piercing Blood
+            if (!"piercing_blood".equals(tecnicaActivaId) && hasPiercingInRoster) {
+                tecnicaActivaId = "piercing_blood";
+                tecnicaActivaNombre = getTechniqueNameComponent("piercing_blood");
+                enviarEstadoTecnicas();
+            }
+            ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
+        }
+        // Reenviar hold(true) cada tick mientras está presionado para evitar condiciones de carrera
+        if (useDown) {
+            ClientPlayNetworking.send(new PiercingBloodHoldPayload(true));
+        }
+
+        if (!useDown && piercingUseHeld) {
+            ClientPlayNetworking.send(new PiercingBloodHoldPayload(false));
+        }
+
+        piercingUseHeld = useDown;
     }
 
     private static void tickBlueAnimationStates() {
@@ -617,6 +656,24 @@ public class JJKClientMod implements ClientModInitializer {
 
         if ("diverging_fist".equals(tecnicaId)) {
             ClientPlayNetworking.send(DivergingFistUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
+        if ("piercing_blood".equals(tecnicaId)) {
+            ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
+        if ("flowing_red_scale".equals(tecnicaId)) {
+            ClientPlayNetworking.send(FlowingRedScaleUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
+        if ("supernova".equals(tecnicaId)) {
+            ClientPlayNetworking.send(SupernovaUsePayload.INSTANCE);
             enfriamientoUsoTicks = USE_BUFFER_TICKS;
             return;
         }

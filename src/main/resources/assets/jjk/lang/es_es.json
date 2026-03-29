@@ -126,5 +126,22 @@
   "message.jjk.infinite_domain_cooldown": "Vacio Infinito en enfriamiento: %s s",
   "message.jjk.infinite_domain_active": "Tu dominio ya esta activo",
   "message.jjk.infinite_domain_end": "Vacio Infinito se desvanece",
-  "message.jjk.not_enough_energy": "No tienes suficiente energia maldita"
+  "message.jjk.not_enough_energy": "No tienes suficiente energia maldita",
+  "character.jjk.choso": "Choso",
+  "character.jjk.choso_desc": "Tecnico de Sangre Kugutsu. Combina disparos de precision extrema, un buff corporal de sangre acelerada y una explosion masiva de sangre concentrada.",
+  "technique.jjk.piercing_blood": "Piercing Blood",
+  "technique.jjk.piercing_blood_desc": "Disparo de sangre concentrada a maxima velocidad que perfora varias entidades y bloques blandos en linea recta.",
+  "technique.jjk.piercing_blood_hint": "Selecciona Piercing Blood en la hotbar y usa clic izquierdo para disparar el proyectil perforante hacia delante.",
+  "technique.jjk.flowing_red_scale": "Flowing Red Scale",
+  "technique.jjk.flowing_red_scale_desc": "Tecnica de autorrefuerzo que acelera la circulacion sanguinea para aumentar velocidad, fuerza de ataque y regeneracion durante unos segundos.",
+  "technique.jjk.flowing_red_scale_hint": "Selecciona Flowing Red Scale en la hotbar y usa clic izquierdo para activar el buff.",
+  "technique.jjk.supernova": "Supernova",
+  "technique.jjk.supernova_desc": "Concentra y expulsa toda la sangre en un radio amplio alrededor de Choso, causando dano masivo y knockback radial a todos los enemigos cercanos.",
+  "technique.jjk.supernova_hint": "Selecciona Supernova en la hotbar y usa clic izquierdo para detonar la explosion de sangre.",
+  "message.jjk.piercing_blood_cast": "Piercing Blood disparado",
+  "message.jjk.piercing_blood_cooldown": "Piercing Blood en enfriamiento: %s s",
+  "message.jjk.flowing_red_scale_cast": "Flowing Red Scale activado",
+  "message.jjk.flowing_red_scale_cooldown": "Flowing Red Scale en enfriamiento: %s s",
+  "message.jjk.supernova_cast": "Supernova detonada",
+  "message.jjk.supernova_cooldown": "Supernova en enfriamiento: %s s"
 }

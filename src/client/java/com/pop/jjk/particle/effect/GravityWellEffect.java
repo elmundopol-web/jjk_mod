@@ -148,14 +148,14 @@ public final class GravityWellEffect {
         sparkCooldown = power > 0.3F ? 1 : 2;
 
         // Cantidad escala agresivamente con power: 1 en power=0, 5 en power=1
-        int count = Math.max(1, (int)(1 + intensity * 4));
+        int count = Math.max(1, (int)(1 + intensity * 2));
         if (launched) count += 2;
 
         RandomSource random = level.random;
 
         for (int i = 0; i < count; i++) {
             // Radio de spawn: cerca del núcleo + extensión con power
-            double radius = 0.8 + random.nextDouble() * (1.2 + intensity * 1.5);
+            double radius = 0.5 + random.nextDouble() * (0.8 + intensity * 0.8);
 
             // Distribución esférica uniforme
             double u = random.nextDouble();

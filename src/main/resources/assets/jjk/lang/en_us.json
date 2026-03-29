@@ -126,5 +126,22 @@
   "message.jjk.infinite_domain_cooldown": "Unlimited Void cooldown: %s s",
   "message.jjk.infinite_domain_active": "Your domain is already active",
   "message.jjk.infinite_domain_end": "Unlimited Void fades away",
-  "message.jjk.not_enough_energy": "Not enough cursed energy"
+  "message.jjk.not_enough_energy": "Not enough cursed energy",
+  "character.jjk.choso": "Choso",
+  "character.jjk.choso_desc": "Blood Kugutsu Technique user. Combines extreme-precision projectiles, a blood-driven body buff and a massive blood-burst explosion.",
+  "technique.jjk.piercing_blood": "Piercing Blood",
+  "technique.jjk.piercing_blood_desc": "A high-velocity concentrated blood shot that pierces multiple entities and soft blocks in a straight line.",
+  "technique.jjk.piercing_blood_hint": "Select Piercing Blood on the hotbar and left click to fire the piercing projectile forward.",
+  "technique.jjk.flowing_red_scale": "Flowing Red Scale",
+  "technique.jjk.flowing_red_scale_desc": "A self-reinforcement technique that accelerates blood circulation to boost movement speed, attack strength and regeneration for a few seconds.",
+  "technique.jjk.flowing_red_scale_hint": "Select Flowing Red Scale on the hotbar and left click to activate the buff.",
+  "technique.jjk.supernova": "Supernova",
+  "technique.jjk.supernova_desc": "Concentrates and expels all blood in a wide radius around Choso, dealing massive damage and radial knockback to every enemy in range.",
+  "technique.jjk.supernova_hint": "Select Supernova on the hotbar and left click to detonate the blood explosion.",
+  "message.jjk.piercing_blood_cast": "Piercing Blood fired",
+  "message.jjk.piercing_blood_cooldown": "Piercing Blood cooldown: %s s",
+  "message.jjk.flowing_red_scale_cast": "Flowing Red Scale activated",
+  "message.jjk.flowing_red_scale_cooldown": "Flowing Red Scale cooldown: %s s",
+  "message.jjk.supernova_cast": "Supernova detonated",
+  "message.jjk.supernova_cooldown": "Supernova cooldown: %s s"
 }

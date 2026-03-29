@@ -61,12 +61,12 @@ public final class BlueOrbAttractionParticle extends JJKBaseParticle {
         this.centerZ = z + vz;
 
         // Velocidad tangencial: define cuán amplia es la espiral
-        this.tangentialSpeed = 0.02F + this.random.nextFloat() * 0.015F;
+        this.tangentialSpeed = 0.012F + this.random.nextFloat() * 0.01F;
         this.orbitDirection = this.random.nextBoolean() ? 1.0F : -1.0F;
         this.verticalOscPhase = this.random.nextFloat() * 6.2832F;
 
         // Fuerza de atracción base: varía para dar profundidad visual
-        this.attractBase = 0.003F + this.random.nextFloat() * 0.003F;
+        this.attractBase = 0.006F + this.random.nextFloat() * 0.004F;
 
         // Velocidad tangencial inicial (perpendicular al radio en XZ)
         double dx = centerX - x;
