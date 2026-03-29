@@ -31,7 +31,7 @@ public final class InfiniteDomainTechniqueHandler {
 
     private static final int DOMAIN_ENERGY_COST = 600;
     private static final int DOMAIN_DURATION_TICKS = 20 * 12;
-    private static final int DOMAIN_BUILDUP_TICKS = 20;
+    private static final int DOMAIN_BUILDUP_TICKS = 50;
     private static final int DOMAIN_COOLDOWN_TICKS = 20 * 60;
     private static final double DOMAIN_RADIUS = 20.0;
     private static final double DOMAIN_RADIUS_SQR = DOMAIN_RADIUS * DOMAIN_RADIUS;
@@ -310,13 +310,16 @@ public final class InfiniteDomainTechniqueHandler {
 
         while (domain.builtWallLayers < targetWallLayers) {
             domain.builtWallLayers++;
-            buildWallLayer(domain, domain.floorY + domain.builtWallLayers);
+            int layerY = domain.floorY + domain.builtWallLayers;
+            buildWallLayer(domain, layerY);
+            playWallLayerSound(domain, layerY);
         }
     }
 
     private static void buildWallLayer(ActiveDomain domain, int y) {
         int outerSq = DOMAIN_RADIUS_BLOCKS * DOMAIN_RADIUS_BLOCKS;
         int innerSq = (DOMAIN_RADIUS_BLOCKS - 1) * (DOMAIN_RADIUS_BLOCKS - 1);
+        int placedBlocks = 0;
 
         for (int x = -DOMAIN_RADIUS_BLOCKS; x <= DOMAIN_RADIUS_BLOCKS; x++) {
             for (int z = -DOMAIN_RADIUS_BLOCKS; z <= DOMAIN_RADIUS_BLOCKS; z++) {
@@ -325,29 +328,57 @@ public final class InfiniteDomainTechniqueHandler {
                     continue;
                 }
 
-                placeDomainBlock(domain, new BlockPos(domain.centerBlockX + x, y, domain.centerBlockZ + z));
+                if (placeDomainBlock(domain, new BlockPos(domain.centerBlockX + x, y, domain.centerBlockZ + z))) {
+                    placedBlocks++;
+                }
             }
+        }
+
+        if (placedBlocks > 0) {
+            spawnWallLayerParticles(domain, y);
         }
     }
 
-    private static void placeDomainBlock(ActiveDomain domain, BlockPos pos) {
+    private static boolean placeDomainBlock(ActiveDomain domain, BlockPos pos) {
         BlockPos immutablePos = pos.immutable();
         if (domain.originalBlocks.containsKey(immutablePos)) {
-            return;
+            return false;
         }
 
         BlockState currentState = domain.level.getBlockState(immutablePos);
         if (domain.level.getBlockEntity(immutablePos) != null) {
-            return;
+            return false;
         }
 
         float hardness = currentState.getDestroySpeed(domain.level, immutablePos);
         if (hardness < 0.0F) {
-            return;
+            return false;
         }
 
         domain.originalBlocks.put(immutablePos, currentState);
         domain.level.setBlock(immutablePos, DOMAIN_SHELL_BLOCK, 3);
+        return true;
+    }
+
+    private static void spawnWallLayerParticles(ActiveDomain domain, int y) {
+        int particleCount = 56;
+        double particleRadius = DOMAIN_RADIUS_BLOCKS - 0.2D;
+
+        for (int i = 0; i < particleCount; i++) {
+            double angle = (Math.PI * 2.0D * i) / particleCount;
+            double x = domain.center.x + Math.cos(angle) * particleRadius;
+            double z = domain.center.z + Math.sin(angle) * particleRadius;
+            double px = x + (domain.level.random.nextDouble() - 0.5D) * 0.35D;
+            double pz = z + (domain.level.random.nextDouble() - 0.5D) * 0.35D;
+
+            domain.level.sendParticles(ParticleTypes.END_ROD, px, y + 0.55D, pz, 1, 0.12D, 0.06D, 0.12D, 0.0D);
+            domain.level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, px, y + 0.18D, pz, 1, 0.08D, 0.04D, 0.08D, 0.0D);
+        }
+    }
+
+    private static void playWallLayerSound(ActiveDomain domain, int y) {
+        float pitch = 0.5F + domain.level.random.nextFloat() * 0.3F;
+        domain.level.playSound(null, domain.center.x, y + 0.5D, domain.center.z, SoundEvents.STONE_PLACE, SoundSource.PLAYERS, 0.4F, pitch);
     }
 
     private static void restoreDomainShell(ActiveDomain domain) {

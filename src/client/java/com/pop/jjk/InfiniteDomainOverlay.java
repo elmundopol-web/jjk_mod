@@ -10,6 +10,8 @@ import net.minecraft.world.phys.Vec3;
 
 public final class InfiniteDomainOverlay {
 
+    private static final int DOMAIN_DURATION_TICKS = 20 * 12;
+    private static final int DOMAIN_BUILDUP_TICKS = 50;
     private static final Map<Integer, DomainVisualState> ACTIVE_DOMAINS = new HashMap<>();
 
     private InfiniteDomainOverlay() {
@@ -67,6 +69,20 @@ public final class InfiniteDomainOverlay {
         return getInsideFactor(client, state);
     }
 
+    public static float getProgressFactor() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || ACTIVE_DOMAINS.isEmpty()) {
+            return 0.0F;
+        }
+
+        DomainVisualState state = getStrongestDomain(client);
+        if (state == null) {
+            return 0.0F;
+        }
+
+        return getProgressFactor(state);
+    }
+
     private static DomainVisualState getStrongestDomain(Minecraft client) {
         DomainVisualState strongest = null;
         float strongestFactor = 0.0F;
@@ -91,6 +107,11 @@ public final class InfiniteDomainOverlay {
         }
 
         return Mth.clamp((float) (1.0D - (distance / state.radius)), 0.0F, 1.0F);
+    }
+
+    private static float getProgressFactor(DomainVisualState state) {
+        int elapsedTicks = DOMAIN_DURATION_TICKS - Math.max(0, state.remainingTicks);
+        return Mth.clamp(elapsedTicks / (float) DOMAIN_BUILDUP_TICKS, 0.0F, 1.0F);
     }
 
     private static final class DomainVisualState {

@@ -2,6 +2,7 @@ package com.pop.jjk.mixin.client;
 
 import com.pop.jjk.InfiniteDomainOverlay;
 import net.minecraft.client.renderer.fog.FogRenderer;
+import net.minecraft.util.Mth;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,12 +17,17 @@ public abstract class InfiniteDomainFogRendererMixin {
         ordinal = 0
     )
     private Vector4f jjk$blackFogColor(Vector4f color) {
-        float insideFactor = InfiniteDomainOverlay.getInsideFactor();
-        if (insideFactor <= 0.0F) {
+        float visualFactor = Mth.clamp(
+            InfiniteDomainOverlay.getInsideFactor() * InfiniteDomainOverlay.getProgressFactor(),
+            0.0F,
+            1.0F
+        );
+        if (visualFactor <= 0.0F) {
             return color;
         }
 
-        color.set(0.0F, 0.0F, 0.0F, 1.0F);
+        float keepFactor = 1.0F - visualFactor;
+        color.set(color.x * keepFactor, color.y * keepFactor, color.z * keepFactor, 1.0F);
         return color;
     }
 
@@ -31,12 +37,16 @@ public abstract class InfiniteDomainFogRendererMixin {
         ordinal = 1
     )
     private float jjk$compressFogDistance(float renderDistanceBlocks) {
-        float insideFactor = InfiniteDomainOverlay.getInsideFactor();
-        if (insideFactor <= 0.0F) {
+        float visualFactor = Mth.clamp(
+            InfiniteDomainOverlay.getInsideFactor() * InfiniteDomainOverlay.getProgressFactor(),
+            0.0F,
+            1.0F
+        );
+        if (visualFactor <= 0.0F) {
             return renderDistanceBlocks;
         }
 
-        float density = insideFactor * insideFactor;
+        float density = visualFactor * visualFactor;
         float multiplier = 1.0F - (0.92F * density);
         return Math.max(8.0F, renderDistanceBlocks * multiplier);
     }
