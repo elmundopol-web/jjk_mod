@@ -34,15 +34,15 @@ public class PiercingBloodProjectileEntity extends Projectile {
     static final double MAX_RANGE         = 50.0;
     static final int    MAX_LIFETIME      = 32;     // ticks máximos de vida
     // Tracking de cámara: el rayo lerpea su dirección hacia donde mira el jugador
-    // con un factor que decae exponencialmente (rápido al inicio, lento al final)
-    static final double INITIAL_TRACKING  = 0.82;  // cuánto gira hacia la cámara en tick 1
-    static final double TRACKING_DECAY    = 0.88;  // el tracking se vuelve más lento cada tick
+    // con un factor que decae exponencialmente SOLO cuando no está en hold
+    static final double INITIAL_TRACKING  = 0.92;  // base para tap; fuerte
+    static final double TRACKING_DECAY    = 0.88;  // se aplica sólo cuando held=false
+    static final double HELD_TRACKING     = 0.90;  // factor constante y fuerte cuando held=true
     static final double HIT_RADIUS       = 0.70;
     static final double BREAK_RADIUS     = 0.40;
     static final int    BLOCKS_PER_TICK  = 6;
-    // Hold: límites propios
-    static final double SPEED_DECAY_HOLD = 0.97;   // decaimiento más lento cuando se mantiene
-    static final double MIN_SPEED_HOLD   = 0.08;   // velocidad mínima mientras se mantiene
+    // Hold: velocidad constante
+    static final double HELD_SPEED       = 3.5;    // velocidad fija mientras se mantiene
     // Daño inicial (brutal) y mínimo (casi nulo al final)
     static final float  INITIAL_DAMAGE   = 12.0F;
     static final float  MIN_DAMAGE       = 1.0F;
@@ -106,24 +106,20 @@ public class PiercingBloodProjectileEntity extends Projectile {
         Vec3 vel = this.getDeltaMovement();
         if (vel.lengthSqr() < 0.0001) { this.discard(); return; }
 
-        // ── Tracking de cámara con factor decreciente ─────────────────────────
-        // Tick 1: trackingFactor ≈ 0.82 (la punta casi snappea a donde miras)
-        // Tick 10: ≈ 0.25 (notablemente lento)
-        // Tick 20: ≈ 0.07 (casi congelado, apenas sigue)
-        double trackingFactor = INITIAL_TRACKING * Math.pow(TRACKING_DECAY, this.tickCount - 1);
+        // ── Tracking de cámara ────────────────────────────────────────────────
         Vec3 currentDir = vel.normalize();
-
-        if (this.held && this.getOwner() instanceof ServerPlayer ownerPlayer) {
+        if (this.getOwner() instanceof ServerPlayer ownerPlayer) {
             Vec3 lookDir = ownerPlayer.getLookAngle().normalize();
-            // Lerp lineal de dirección → normalizar para mantener longitud unitaria
-            currentDir = currentDir.add(lookDir.subtract(currentDir).scale(trackingFactor)).normalize();
+            double factor = this.held
+                ? HELD_TRACKING
+                : (INITIAL_TRACKING * Math.pow(TRACKING_DECAY, this.tickCount - 1));
+            currentDir = currentDir.add(lookDir.subtract(currentDir).scale(factor)).normalize();
         }
 
-        // ── Decaimiento exponencial de velocidad ─────────────────────────────
+        // ── Velocidad ────────────────────────────────────────────────────────
         double currentSpeed;
         if (this.held) {
-            currentSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY_HOLD, Math.max(0, this.holdTicks));
-            if (currentSpeed < MIN_SPEED_HOLD) currentSpeed = MIN_SPEED_HOLD;
+            currentSpeed = HELD_SPEED; // constante durante hold
         } else {
             currentSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY, this.tickCount - 1);
             if (currentSpeed <= MIN_SPEED) {
@@ -140,8 +136,17 @@ public class PiercingBloodProjectileEntity extends Projectile {
         if (!this.held && remaining <= 0.0) { this.discard(); return; }
 
         double step = this.held ? currentSpeed : Math.min(currentSpeed, remaining);
-        Vec3 prev   = this.position();
-        Vec3 next   = prev.add(currentDir.scale(step));
+        Vec3 prev;
+        Vec3 next;
+        if (this.held && this.getOwner() instanceof ServerPlayer ownerMove) {
+            Vec3 lookDir = ownerMove.getLookAngle().normalize();
+            Vec3 origin  = ownerMove.getEyePosition().add(lookDir.scale(0.55));
+            prev = origin;
+            next = origin.add(currentDir.scale(step));
+        } else {
+            prev = this.position();
+            next = prev.add(currentDir.scale(step));
+        }
 
         if (!this.held) this.distanceTravelled += step;
         this.setPos(next);

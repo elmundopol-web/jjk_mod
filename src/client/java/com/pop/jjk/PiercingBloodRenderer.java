@@ -41,8 +41,8 @@ public class PiercingBloodRenderer extends EntityRenderer<PiercingBloodProjectil
     public void submit(EntityRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
                        CameraRenderState cameraRenderState) {
         float t     = renderState.ageInTicks;
-        // intensity: 1.0 en tick 0 → 0.0 en ~200 ticks (sostener pulsado mantiene el haz visible más tiempo)
-        float intensity = Math.max(0.0F, 1.0F - t / 200.0F);
+        // intensity: 1.0 en tick 0 → 0.0 en tick MAX_LIFETIME (30)
+        float intensity = Math.max(0.0F, 1.0F - t / 30.0F);
         if (intensity <= 0.01F) return;
 
         float pulse = 1.0F + Mth.sin(t * 4.2F) * 0.07F;
