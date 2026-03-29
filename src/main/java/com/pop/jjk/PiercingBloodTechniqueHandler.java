@@ -27,13 +27,19 @@ public final class PiercingBloodTechniqueHandler {
         if (!player.isAlive()) return;
         if (!isTechniqueAvailable(player)) return;
 
-        // Si ya hay un rayo activo de este jugador, no crear otro: activar hold y salir
+        // Limpiar referencia obsoleta si quedó un ID guardado pero ya no existe la entidad
         {
             ServerLevel levelCheck = (ServerLevel) player.level();
+            Integer pid = ACTIVE_PROJECTILES.get(player.getUUID());
+            if (pid != null) {
+                net.minecraft.world.entity.Entity ent = levelCheck.getEntity(pid);
+                if (!(ent instanceof PiercingBloodProjectileEntity) || !ent.isAlive()) {
+                    ACTIVE_PROJECTILES.remove(player.getUUID());
+                }
+            }
+            // Si aún hay un proyectil activo, no crear otro
             PiercingBloodProjectileEntity existing = findActiveProjectile(player, levelCheck);
             if (existing != null && existing.isAlive()) {
-                existing.setHeld(true);
-                existing.requestMinLifetimeTicks(6);
                 return;
             }
         }
@@ -64,11 +70,8 @@ public final class PiercingBloodTechniqueHandler {
 
         PiercingBloodProjectileEntity projectile = new PiercingBloodProjectileEntity(level, player);
         level.addFreshEntity(projectile);
-        projectile.setHeld(true);
-        projectile.requestMinLifetimeTicks(6);
+        // Siempre nace con held=false; el cliente mandará onHold(true) si el jugador mantiene
         ACTIVE_PROJECTILES.put(player.getUUID(), projectile.getId());
-
-        COOLDOWNS.put(player.getUUID(), COOLDOWN_TICKS);
     }
 
     public static void tick() {
@@ -94,6 +97,11 @@ public final class PiercingBloodTechniqueHandler {
         if (holding) {
             proj.requestMinLifetimeTicks(6);
         }
+    }
+
+    public static void onProjectileDied(UUID ownerUUID) {
+        ACTIVE_PROJECTILES.remove(ownerUUID);
+        COOLDOWNS.put(ownerUUID, COOLDOWN_TICKS);
     }
 
     private static PiercingBloodProjectileEntity findActiveProjectile(ServerPlayer player, ServerLevel level) {

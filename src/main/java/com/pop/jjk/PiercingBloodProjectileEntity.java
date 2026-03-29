@@ -61,6 +61,7 @@ public class PiercingBloodProjectileEntity extends Projectile {
     private boolean held;
     private int holdTicks;
     private int graceUntilTick = -1;
+    private int releaseTicksRemaining = 0;
 
     public PiercingBloodProjectileEntity(EntityType<? extends PiercingBloodProjectileEntity> type, Level level) {
         super(type, level);
@@ -104,36 +105,50 @@ public class PiercingBloodProjectileEntity extends Projectile {
         this.setNoGravity(true);
 
         Vec3 vel = this.getDeltaMovement();
-        if (vel.lengthSqr() < 0.0001) { this.discard(); return; }
+        if (vel.lengthSqr() < 0.0001) { if (this.level() instanceof ServerLevel) { notifyDied(); } this.discard(); return; }
 
         // ── Tracking de cámara ────────────────────────────────────────────────
         Vec3 currentDir = vel.normalize();
-        if (this.getOwner() instanceof ServerPlayer ownerPlayer) {
+        if (this.held && this.getOwner() instanceof ServerPlayer ownerPlayer) {
             Vec3 lookDir = ownerPlayer.getLookAngle().normalize();
-            double factor = this.held
-                ? HELD_TRACKING
-                : (INITIAL_TRACKING * Math.pow(TRACKING_DECAY, this.tickCount - 1));
-            currentDir = currentDir.add(lookDir.subtract(currentDir).scale(factor)).normalize();
+            currentDir = currentDir.add(lookDir.subtract(currentDir).scale(HELD_TRACKING)).normalize();
         }
 
         // ── Velocidad ────────────────────────────────────────────────────────
         double currentSpeed;
-        if (this.held) {
-            currentSpeed = HELD_SPEED; // constante durante hold
-        } else {
-            // Rampa de aceleración en los 3 primeros ticks (tap / no held)
-            if (this.tickCount == 1) {
-                currentSpeed = INITIAL_SPEED / 2.5;
-            } else if (this.tickCount == 2) {
-                currentSpeed = INITIAL_SPEED / 1.5;
-            } else if (this.tickCount == 3) {
-                currentSpeed = INITIAL_SPEED;
-            } else {
-                currentSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY, this.tickCount - 1);
+        if (this.releaseTicksRemaining > 0) {
+            // Decaimiento rápido tras soltar: multiplicativo respecto a la velocidad previa
+            double lastSpeed = vel.length();
+            currentSpeed = Math.max(0.02, lastSpeed * 0.70);
+            this.releaseTicksRemaining--;
+            if (this.releaseTicksRemaining == 0) {
+                if (this.level() instanceof ServerLevel sl) {
+                    spawnTrailEnd(sl, this.position());
+                    notifyDied();
+                }
+                this.discard();
+                return;
             }
-            if (currentSpeed <= MIN_SPEED) {
-                if (this.level() instanceof ServerLevel sl) spawnTrailEnd(sl, this.position());
-                this.discard(); return;
+        } else {
+            // Velocidad base con rampa inicial (siempre se aplica en ticks 1-2)
+            double baseSpeed;
+            if (this.tickCount == 1) {
+                baseSpeed = INITIAL_SPEED * 2.2;
+            } else if (this.tickCount == 2) {
+                baseSpeed = INITIAL_SPEED * 1.4;
+            } else {
+                baseSpeed = INITIAL_SPEED * Math.pow(SPEED_DECAY, this.tickCount - 1);
+            }
+
+            if (this.held) {
+                // En hold, tras la rampa inicial (>=tick 3), usar velocidad constante controlable
+                currentSpeed = (this.tickCount >= 3) ? HELD_SPEED : baseSpeed;
+            } else {
+                currentSpeed = baseSpeed;
+                if (currentSpeed <= MIN_SPEED) {
+                    if (this.level() instanceof ServerLevel sl) { spawnTrailEnd(sl, this.position()); notifyDied(); }
+                    this.discard(); return;
+                }
             }
         }
 
@@ -141,24 +156,32 @@ public class PiercingBloodProjectileEntity extends Projectile {
         if (this.held) this.holdTicks++;
 
         // ── Movimiento ───────────────────────────────────────────────────────
-        double remaining = this.held ? Double.POSITIVE_INFINITY : (MAX_RANGE - this.distanceTravelled);
-        if (!this.held && remaining <= 0.0) { this.discard(); return; }
+        double remaining = (this.held || this.releaseTicksRemaining > 0)
+            ? Double.POSITIVE_INFINITY : (MAX_RANGE - this.distanceTravelled);
+        if (!(this.held || this.releaseTicksRemaining > 0) && remaining <= 0.0) {
+            if (this.level() instanceof ServerLevel sl2) { spawnTrailEnd(sl2, this.position()); notifyDied(); }
+            this.discard(); return; }
 
         double step = this.held ? currentSpeed : Math.min(currentSpeed, remaining);
         Vec3 prev = this.position();
         Vec3 next = prev.add(currentDir.scale(step));
 
-        if (!this.held) this.distanceTravelled += step;
+        if (!(this.held || this.releaseTicksRemaining > 0)) this.distanceTravelled += step;
         this.setPos(next);
         this.move(MoverType.SELF, Vec3.ZERO);
         this.updateRotation();
 
         if (!(this.level() instanceof ServerLevel serverLevel)) return;
 
-        // ── Intensidad global: 1.0 al inicio → 0.0 al final (tap). En hold es constante.
-        float intensity = this.held
-            ? 1.0F
-            : (float) Math.max(0.0, 1.0 - (double)(this.tickCount - 1) / MAX_LIFETIME);
+        // ── Intensidad global ────────────────────────────────────────────────
+        float intensity;
+        if (this.held) {
+            intensity = 1.0F;
+        } else if (this.releaseTicksRemaining > 0) {
+            intensity = Math.max(0.0F, this.releaseTicksRemaining / 10.0F);
+        } else {
+            intensity = (float) Math.max(0.0, 1.0 - (double)(this.tickCount - 1) / MAX_LIFETIME);
+        }
         float currentDamage = MIN_DAMAGE + (INITIAL_DAMAGE - MIN_DAMAGE) * intensity;
 
         if (this.tickCount == 1) {
@@ -176,13 +199,14 @@ public class PiercingBloodProjectileEntity extends Projectile {
         }
         // Visual único de rayo: no generamos trail adicional para evitar líneas duplicadas
 
-        if (this.distanceTravelled >= MAX_RANGE) {
+        if (this.distanceTravelled >= MAX_RANGE && !(this.held || this.releaseTicksRemaining > 0)) {
             spawnTrailEnd(serverLevel, next);
+            notifyDied();
             this.discard();
-        } else if (!this.held) {
-            int minTicks = this.graceUntilTick >= 0 ? this.graceUntilTick : 20;
-            if (this.tickCount >= minTicks) {
+        } else if (!(this.held || this.releaseTicksRemaining > 0)) {
+            if (this.tickCount >= MAX_LIFETIME) {
                 spawnTrailEnd(serverLevel, next);
+                notifyDied();
                 this.discard();
             }
         }
@@ -371,12 +395,25 @@ public class PiercingBloodProjectileEntity extends Projectile {
     }
 
     public void setHeld(boolean held) {
+        boolean wasHeld = this.held;
         this.held = held;
-        if (held) this.graceUntilTick = -1;
+        if (held) {
+            this.graceUntilTick = -1;
+            this.releaseTicksRemaining = 0; // cancelar fade de liberación si se vuelve a mantener
+        } else if (wasHeld && !held) {
+            // Iniciar fade de liberación (10 ticks)
+            this.releaseTicksRemaining = 10;
+        }
     }
 
     public void requestMinLifetimeTicks(int ticks) {
         int target = this.tickCount + Math.max(0, ticks);
         if (this.graceUntilTick < target) this.graceUntilTick = target;
+    }
+
+    private void notifyDied() {
+        if (this.getOwner() instanceof ServerPlayer sp) {
+            PiercingBloodTechniqueHandler.onProjectileDied(sp.getUUID());
+        }
     }
 }
