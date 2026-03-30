@@ -20,7 +20,19 @@ public record JJKParticleConfig(
     float friction,
     float spinSpeed,
     boolean fullBright,
-    boolean hasPhysics
+    boolean hasPhysics,
+    // Pulse
+    float pulseAmp,
+    float pulseFreqA,
+    float pulseFreqB,
+    // Turbulence
+    float turbAmp,
+    float turbFreqX,
+    float turbFreqY,
+    float turbFreqZ,
+    float turbDecay,
+    // Attraction (radial towards provided center via per-instance vx/vy/vz usage)
+    float attractStrength
 ) {
 
     public static Builder builder() {
@@ -41,6 +53,16 @@ public record JJKParticleConfig(
         private float spinSpeed = 0.0F;
         private boolean fullBright = true;
         private boolean hasPhysics = false;
+        // defaults (0 = disabled)
+        private float pulseAmp = 0.0F;
+        private float pulseFreqA = 0.0F;
+        private float pulseFreqB = 0.0F;
+        private float turbAmp = 0.0F;
+        private float turbFreqX = 0.0F;
+        private float turbFreqY = 0.0F;
+        private float turbFreqZ = 0.0F;
+        private float turbDecay = 0.8F;
+        private float attractStrength = 0.0F;
 
         private Builder() {}
 
@@ -96,6 +118,27 @@ public record JJKParticleConfig(
             return this;
         }
 
+        public Builder pulse(float amp, float freqA, float freqB) {
+            this.pulseAmp = amp;
+            this.pulseFreqA = freqA;
+            this.pulseFreqB = freqB;
+            return this;
+        }
+
+        public Builder turbulence(float amp, float fx, float fy, float fz, float decay) {
+            this.turbAmp = amp;
+            this.turbFreqX = fx;
+            this.turbFreqY = fy;
+            this.turbFreqZ = fz;
+            this.turbDecay = decay;
+            return this;
+        }
+
+        public Builder attraction(float strength) {
+            this.attractStrength = strength;
+            return this;
+        }
+
         public JJKParticleConfig build() {
             return new JJKParticleConfig(
                 startR, startG, startB,
@@ -104,7 +147,10 @@ public record JJKParticleConfig(
                 startAlpha, endAlpha,
                 minLifetime, maxLifetime,
                 gravity, friction, spinSpeed,
-                fullBright, hasPhysics
+                fullBright, hasPhysics,
+                pulseAmp, pulseFreqA, pulseFreqB,
+                turbAmp, turbFreqX, turbFreqY, turbFreqZ, turbDecay,
+                attractStrength
             );
         }
     }

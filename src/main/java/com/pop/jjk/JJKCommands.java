@@ -31,6 +31,9 @@ public final class JJKCommands {
 
         if (enabled) {
             InfiniteDomainTechniqueHandler.clearCooldown(player);
+            PiercingBloodTechniqueHandler.clearCooldown(player);
+            FlowingRedScaleTechniqueHandler.clearCooldown(player);
+            SupernovaTechniqueHandler.clearCooldown(player);
             source.sendSuccess(() -> Component.literal("Cooldowns de Gojo desactivados para ti."), false);
         } else {
             source.sendSuccess(() -> Component.literal("Cooldowns de Gojo reactivados."), false);
@@ -43,6 +46,9 @@ public final class JJKCommands {
         ServerPlayer player = source.getPlayerOrException();
         BlueTechniqueHandler.clearCooldown(player);
         InfiniteDomainTechniqueHandler.clearCooldown(player);
+        PiercingBloodTechniqueHandler.clearCooldown(player);
+        FlowingRedScaleTechniqueHandler.clearCooldown(player);
+        SupernovaTechniqueHandler.clearCooldown(player);
         source.sendSuccess(() -> Component.literal("Cooldowns de Gojo limpiados."), false);
         return 1;
     }

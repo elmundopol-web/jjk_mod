@@ -31,8 +31,8 @@ public final class BlueOrbSparkParticle extends JJKBaseParticle {
 
     private static final JJKParticleConfig CONFIG = JJKParticleConfig.builder()
         .colorGradient(
-            0.4F,  0.85F, 1.0F,    // start: cyan brillante
-            0.85F, 0.95F, 1.0F     // end: casi blanco (al ser absorbido)
+            0.50F, 0.78F, 1.0F,    // start: azul sprite (80C8FF aprox)
+            0.90F, 0.97F, 1.0F     // end: casi blanco (C0EEFF/EEFFFF aprox)
         )
         .scale(0.06F, 0.01F)       // MUY pequeñas — la densidad viene de la cantidad
         .alpha(0.9F, 0.0F)

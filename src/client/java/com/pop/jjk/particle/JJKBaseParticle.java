@@ -22,6 +22,15 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
     protected final SpriteSet sprites;
     protected final JJKParticleConfig config;
     protected final float baseQuadSize;
+    // Phases for procedural modulation
+    private final float pulsePhaseA;
+    private final float pulsePhaseB;
+    private final float turbPhase;
+    // Optional attraction center (derived from vx,vy,vz as center offset)
+    private final boolean hasAttractCenter;
+    private final double centerX;
+    private final double centerY;
+    private final double centerZ;
 
     protected JJKBaseParticle(ClientLevel level, double x, double y, double z,
                                double vx, double vy, double vz,
@@ -33,6 +42,19 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
         this.xd = vx;
         this.yd = vy;
         this.zd = vz;
+
+        // If attraction is enabled, interpret (vx,vy,vz) also as center offset
+        if (config.attractStrength() != 0.0F) {
+            this.centerX = x + vx;
+            this.centerY = y + vy;
+            this.centerZ = z + vz;
+            this.hasAttractCenter = true;
+        } else {
+            this.centerX = x;
+            this.centerY = y;
+            this.centerZ = z;
+            this.hasAttractCenter = false;
+        }
 
         int range = Math.max(1, config.maxLifetime() - config.minLifetime());
         this.lifetime = config.minLifetime() + this.random.nextInt(range);
@@ -51,6 +73,11 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
 
         this.oRoll = 0.0F;
         this.roll = (this.random.nextFloat() - 0.5F) * 6.2832F;
+
+        // Randomize phases for organic variation
+        this.pulsePhaseA = this.random.nextFloat() * 6.2832F;
+        this.pulsePhaseB = this.random.nextFloat() * 6.2832F;
+        this.turbPhase = this.random.nextFloat() * 6.2832F;
 
         this.setSpriteFromAge(sprites);
     }
@@ -74,6 +101,7 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
         interpolateSize(progress);
         applyRoll(progress);
         tickMovement(progress);
+        applyBaseBehaviors(progress);
 
         this.yd -= this.gravity;
         this.move(this.xd, this.yd, this.zd);
@@ -95,6 +123,7 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
     protected SingleQuadParticle.Layer getLayer() {
         return SingleQuadParticle.Layer.TRANSLUCENT;
     }
+
 
     @Override
     public int getLightColor(float partialTick) {
@@ -158,6 +187,43 @@ public abstract class JJKBaseParticle extends SingleQuadParticle {
     private void applyRoll(float progress) {
         if (config.spinSpeed() != 0.0F) {
             this.roll += config.spinSpeed() * (1.0F - progress * 0.4F);
+        }
+    }
+
+    private void applyBaseBehaviors(float progress) {
+        // Pulse (scale breathing)
+        if (config.pulseAmp() != 0.0F) {
+            float a = (float) Math.sin(this.age * config.pulseFreqA() + pulsePhaseA);
+            float b = (float) Math.sin(this.age * config.pulseFreqB() + pulsePhaseB) * 0.5F;
+            float amp = config.pulseAmp() * (1.0F - progress * 0.4F);
+            float pulse = (a + b) * amp;
+            this.quadSize *= (1.0F + pulse);
+        }
+
+        // Turbulence (soft chaotic motion)
+        if (config.turbAmp() != 0.0F) {
+            float decay = Math.max(0.0F, 1.0F - progress * config.turbDecay());
+            float amp = config.turbAmp() * decay;
+            float t = this.age + turbPhase;
+            this.xd += Math.sin(t * config.turbFreqX()) * amp;
+            this.yd += Math.cos(t * config.turbFreqY()) * amp * 0.7F;
+            this.zd += Math.sin(t * config.turbFreqZ() + 1.3F) * amp;
+        }
+
+        // Radial attraction towards center (if provided via constructor)
+        if (hasAttractCenter && config.attractStrength() != 0.0F) {
+            double dx = centerX - this.x;
+            double dy = centerY - this.y;
+            double dz = centerZ - this.z;
+            double distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq > 0.0004) {
+                double dist = Math.sqrt(distSq);
+                double inv = 1.0 / dist;
+                float strength = config.attractStrength() * (0.3F + progress * progress * 0.7F);
+                this.xd += dx * inv * strength;
+                this.yd += dy * inv * strength;
+                this.zd += dz * inv * strength;
+            }
         }
     }
 }

@@ -1,132 +1,171 @@
 package com.pop.jjk;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class SupernovaTechniqueHandler {
 
-    private static final int    COOLDOWN_TICKS = 300;
-    private static final int    ENERGY_COST    = 220;
-    private static final double RADIUS         = 6.0;
-    private static final float  DAMAGE         = 10.0F;
-    private static final double KNOCKBACK      = 1.1;
-    private static final double KNOCKBACK_UP   = 0.45;
+    private static final int COOLDOWN_TICKS = 400;
+    private static final int COST_PER_ORB = 18;   // coste por orbe
+    private static final int MAX_ORBS = 12;       // máximo de orbes acumulables
 
-    private static final DustParticleOptions BLOOD_DUST       = new DustParticleOptions(0xCC1010, 1.4F);
-    private static final DustParticleOptions BLOOD_DUST_MED   = new DustParticleOptions(0xFF3030, 1.0F);
     private static final DustParticleOptions BLOOD_DUST_SMALL = new DustParticleOptions(0xFF7070, 0.7F);
 
     private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
+    private static final Map<UUID, HoldState> HOLDS = new HashMap<>();
+    private static final Map<UUID, List<Integer>> ORBS = new HashMap<>();
+    private static final Map<UUID, Double> ORBIT_SPEEDS = new HashMap<>();
 
-    private SupernovaTechniqueHandler() {
+    private SupernovaTechniqueHandler() {}
+
+    // Compat: un "use" sin hold inicia la carga
+    public static void activate(ServerPlayer player) {
+        onHold(player, true);
     }
 
-    public static void activate(ServerPlayer player) {
+    public static void onHold(ServerPlayer player, boolean holding) {
         if (!player.isAlive()) return;
         if (!isTechniqueAvailable(player)) return;
 
-        int cd = COOLDOWNS.getOrDefault(player.getUUID(), 0);
-        if (cd > 0) {
-            player.displayClientMessage(
-                Component.translatable("message.jjk.supernova_cooldown", formatSeconds(cd)), true);
-            return;
+        UUID id = player.getUUID();
+        int cd = COOLDOWNS.getOrDefault(id, 0);
+        if (holding) {
+            if (cd > 0 && !BlueTechniqueHandler.hasNoCooldown(id)) {
+                player.displayClientMessage(Component.translatable("message.jjk.supernova_cooldown", formatSeconds(cd)), true);
+                return;
+            }
+            HOLDS.computeIfAbsent(id, k -> new HoldState((ServerLevel) player.level()));
+            ((ServerLevel) player.level()).playSound(null, player.blockPosition(), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.6F, 1.6F);
+        } else {
+            HoldState state = HOLDS.remove(id);
+            if (state != null) {
+                launchAll(player);
+                if (!BlueTechniqueHandler.hasNoCooldown(id)) {
+                    COOLDOWNS.put(id, COOLDOWN_TICKS);
+                } else {
+                    COOLDOWNS.remove(id);
+                }
+            }
         }
-
-        if (!CursedEnergyManager.consume(player, ENERGY_COST)) {
-            player.displayClientMessage(Component.translatable("message.jjk.not_enough_energy"), true);
-            return;
-        }
-
-        ServerLevel level = (ServerLevel) player.level();
-        Vec3 center = player.position().add(0, player.getBbHeight() * 0.5, 0);
-
-        explode(level, player, center);
-
-        COOLDOWNS.put(player.getUUID(), COOLDOWN_TICKS);
-        player.displayClientMessage(Component.translatable("message.jjk.supernova_cast"), true);
     }
 
     public static void tick() {
+        // Tick cooldowns
         COOLDOWNS.entrySet().removeIf(entry -> {
             int next = entry.getValue() - 1;
             if (next <= 0) return true;
             entry.setValue(next);
             return false;
         });
+
+        // Tick holds: spawn orbs, increase orbit speed, ring FX
+        for (Map.Entry<UUID, HoldState> entry : new ArrayList<>(HOLDS.entrySet())) {
+            UUID pid = entry.getKey();
+            HoldState state = entry.getValue();
+            state.ticks++;
+
+            ServerPlayer p = state.level.getServer().getPlayerList().getPlayer(pid);
+            if (p == null || !p.isAlive() || p.level() != state.level) {
+                HOLDS.remove(pid);
+                continue;
+            }
+
+            List<Integer> list = ORBS.computeIfAbsent(pid, k -> new ArrayList<>());
+            if (state.spawnCooldown > 0) state.spawnCooldown--;
+            int spawnInterval = Math.max(3, 10 - (state.ticks / 20) * 2);
+            if (state.spawnCooldown <= 0 && list.size() < MAX_ORBS) {
+                if (BlueTechniqueHandler.hasNoCooldown(pid) || CursedEnergyManager.consume(p, COST_PER_ORB)) {
+                    spawnOrb(state.level, p, list);
+                    state.spawnCooldown = spawnInterval;
+                } else {
+                    state.spawnCooldown = 6;
+                }
+            }
+
+            double speed = 0.14 + 0.02 * list.size() + 0.0012 * state.ticks;
+            ORBIT_SPEEDS.put(pid, Math.min(0.6, speed));
+
+            if (state.ticks % 6 == 0) {
+                Vec3 c = p.position().add(0, p.getBbHeight() * 0.5, 0);
+                double r = 1.8 + Math.min(1.5, list.size() * 0.12);
+                for (int i = 0; i < 18; i++) {
+                    double ang = (i / 18.0) * (Math.PI * 2.0) + (state.ticks * 0.07);
+                    double x = c.x + Math.cos(ang) * r;
+                    double z = c.z + Math.sin(ang) * r;
+                    double y = c.y + (p.getRandom().nextDouble() - 0.5) * 0.5;
+                    state.level.sendParticles(BLOOD_DUST_SMALL, x, y, z, 1, 0.02, 0.02, 0.02, 0.0);
+                }
+            }
+
+            // Limpiar referencias a orbes muertos
+            list.removeIf(id -> state.level.getEntity(id) == null);
+            if (list.isEmpty()) {
+                ORBS.remove(pid);
+            }
+        }
     }
 
     public static void clearActive() {
         COOLDOWNS.clear();
+        HOLDS.clear();
+        ORBS.clear();
+        ORBIT_SPEEDS.clear();
     }
 
-    private static void explode(ServerLevel level, ServerPlayer player, Vec3 center) {
-        AABB area = new AABB(
-            center.x - RADIUS, center.y - RADIUS, center.z - RADIUS,
-            center.x + RADIUS, center.y + RADIUS, center.z + RADIUS
-        );
-
-        List<LivingEntity> targets = level.getEntitiesOfClass(
-            LivingEntity.class, area,
-            e -> e.isAlive() && e != player
-        );
-
-        for (LivingEntity target : targets) {
-            double dist = target.position().add(0, target.getBbHeight() * 0.5, 0).distanceTo(center);
-            if (dist > RADIUS) continue;
-
-            double falloff = 1.0 - (dist / RADIUS);
-            float dmg = (float)(DAMAGE * (0.4 + falloff * 0.6));
-
-            target.hurtServer(level, level.damageSources().playerAttack(player), dmg);
-
-            Vec3 push = target.position().add(0, target.getBbHeight() * 0.5, 0).subtract(center);
-            if (push.lengthSqr() < 0.0001) {
-                push = new Vec3(0, 1, 0);
-            }
-            push = push.normalize();
-            double str = KNOCKBACK * falloff;
-            target.push(push.x * str, KNOCKBACK_UP * falloff, push.z * str);
-            target.hurtMarked = true;
-        }
-
-        spawnExplosionParticles(level, center);
-        sendShakeToNearby(level, center, 3.5F, 12);
-
-        level.playSound(null, center.x, center.y, center.z,
-            SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 1.6F, 0.65F);
+    private static void spawnOrb(ServerLevel level, ServerPlayer p, List<Integer> list) {
+        float baseAngle = p.getRandom().nextFloat() * (float) (Math.PI * 2.0);
+        SupernovaOrbProjectileEntity orb = new SupernovaOrbProjectileEntity(level, p, baseAngle);
+        level.addFreshEntity(orb);
+        list.add(orb.getId());
+        level.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 0.25F, 1.9F);
     }
 
-    private static void spawnExplosionParticles(ServerLevel level, Vec3 center) {
-        level.sendParticles(BLOOD_DUST,       center.x, center.y, center.z, 80,  2.5, 2.5, 2.5, 0.0);
-        level.sendParticles(BLOOD_DUST_MED,   center.x, center.y, center.z, 60,  3.5, 3.5, 3.5, 0.0);
-        level.sendParticles(BLOOD_DUST_SMALL, center.x, center.y, center.z, 40,  4.5, 4.5, 4.5, 0.0);
-        level.sendParticles(ParticleTypes.LARGE_SMOKE, center.x, center.y, center.z, 15, 2.0, 2.0, 2.0, 0.04);
-        level.sendParticles(ParticleTypes.EXPLOSION,   center.x, center.y, center.z,  4, 1.5, 1.5, 1.5, 0.0);
-    }
-
-    private static void sendShakeToNearby(ServerLevel level, Vec3 center, float intensity, int durationTicks) {
-        double range = 40.0;
-        for (ServerPlayer nearby : level.getPlayers(p -> p.position().distanceTo(center) < range)) {
-            float dist    = (float) nearby.position().distanceTo(center);
-            float falloff = Math.max(0.0F, 1.0F - (dist / (float) range));
-            if (falloff > 0.05F) {
-                ServerPlayNetworking.send(nearby, new ScreenShakePayload(intensity * falloff, durationTicks));
+    private static void launchAll(ServerPlayer player) {
+        UUID pid = player.getUUID();
+        List<Integer> list = ORBS.get(pid);
+        if (list == null || list.isEmpty()) return;
+        Vec3 dir = player.getLookAngle().normalize();
+        ServerLevel level = (ServerLevel) player.level();
+        for (Integer id : new ArrayList<>(list)) {
+            if (level.getEntity(id) instanceof SupernovaOrbProjectileEntity orb) {
+                orb.launch(dir);
             }
         }
+        player.displayClientMessage(Component.translatable("message.jjk.supernova_cast"), true);
+    }
+
+    public static void onOrbExploded(UUID playerId, int orbId) {
+        List<Integer> list = ORBS.get(playerId);
+        if (list != null) {
+            list.remove((Integer) orbId);
+            if (list.isEmpty()) {
+                ORBS.remove(playerId);
+            }
+        }
+    }
+
+    public static double getOrbitSpeed(UUID playerId) {
+        return ORBIT_SPEEDS.getOrDefault(playerId, 0.18);
+    }
+
+    // (screen shake opcional no requerido por este rediseño)
+
+    private static final class HoldState {
+        final ServerLevel level;
+        int ticks = 0;
+        int spawnCooldown = 0;
+        HoldState(ServerLevel level) { this.level = level; }
     }
 
     private static boolean isTechniqueAvailable(ServerPlayer player) {
@@ -137,5 +176,9 @@ public final class SupernovaTechniqueHandler {
 
     private static String formatSeconds(int ticks) {
         return String.format(java.util.Locale.ROOT, "%.1f", ticks / 20.0);
+    }
+
+    public static void clearCooldown(ServerPlayer player) {
+        COOLDOWNS.remove(player.getUUID());
     }
 }

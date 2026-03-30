@@ -50,6 +50,7 @@ public class JJKClientMod implements ClientModInitializer {
     private static boolean infoKeyHeld = false;
     private static boolean blueUseHeld = false;
     private static boolean piercingUseHeld = false;
+    private static boolean supernovaUseHeld = false;
     private static String tecnicaActivaId = JJKRoster.NONE;
     private static Component tecnicaActivaNombre = NO_TECHNIQUE_NAME;
     private static boolean infinitoActivo = false;
@@ -73,6 +74,29 @@ public class JJKClientMod implements ClientModInitializer {
             this.ticksInPhase = 0;
             this.chargingStarted = phase == BlueAnimSyncPayload.PHASE_CHARGING;
         }
+
+    private static void handleSupernovaHoldInput(Minecraft client) {
+        boolean canInteract = client.player != null && client.screen == null;
+        AbilityHotbarEntry entry = getSelectedAbilityEntry();
+
+        boolean allowByHotbar = shouldCaptureAbilityInput(client)
+            && entry != null
+            && "supernova".equals(entry.id());
+
+        boolean inputDown = client.options.keyUse.isDown();
+        boolean useDown = canInteract && allowByHotbar && inputDown;
+
+        if (useDown && !supernovaUseHeld) {
+            // iniciar carga (compat) y marcar hold
+            ClientPlayNetworking.send(SupernovaUsePayload.INSTANCE);
+        }
+        if (useDown) {
+            ClientPlayNetworking.send(new SupernovaHoldPayload(true));
+        }
+        if (!useDown && supernovaUseHeld) {
+            ClientPlayNetworking.send(new SupernovaHoldPayload(false));
+        }
+        supernovaUseHeld = useDown;
     }
 
     @Override
@@ -98,6 +122,13 @@ public class JJKClientMod implements ClientModInitializer {
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbSparkParticle::new));
         ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ORB_ATTRACTION,
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbAttractionParticle::new));
+        // Blood particles
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_CORE,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodCoreParticle::new));
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_TRAIL,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodTrailParticle::new));
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_EXPLOSION,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodExplosionParticle::new));
 
         abrirMenu = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "key.jjk.open_menu",
@@ -177,6 +208,7 @@ public class JJKClientMod implements ClientModInitializer {
 
             handleBlueHoldInput(client);
             handlePiercingHoldInput(client);
+            handleSupernovaHoldInput(client);
         });
     }
 
@@ -464,31 +496,22 @@ public class JJKClientMod implements ClientModInitializer {
     private static void handlePiercingHoldInput(Minecraft client) {
         boolean canInteract = client.player != null && client.screen == null;
         AbilityHotbarEntry entry = getSelectedAbilityEntry();
-        boolean isSelectedPiercing = entry != null && "piercing_blood".equals(entry.id());
-        boolean hasPiercingInRoster = JJKRoster.techniquesForCharacter(characterId).stream()
-            .anyMatch(t -> t.id().equals("piercing_blood"));
-        boolean isActivePiercing = "piercing_blood".equals(tecnicaActivaId) || isSelectedPiercing || hasPiercingInRoster;
-        boolean inputDown = client.options.keyUse.isDown() || client.options.keyAttack.isDown();
-        boolean useDown = canInteract && isActivePiercing && inputDown;
+
+        boolean allowByHotbar = shouldCaptureAbilityInput(client)
+            && entry != null
+            && "piercing_blood".equals(entry.id());
+        boolean inputDown = client.options.keyUse.isDown();
+        boolean useDown = canInteract && allowByHotbar && inputDown;
 
         if (useDown && !piercingUseHeld) {
-            // Asegurar estado activo localmente si el roster incluye Piercing Blood
-            if (!"piercing_blood".equals(tecnicaActivaId) && hasPiercingInRoster) {
-                tecnicaActivaId = "piercing_blood";
-                tecnicaActivaNombre = getTechniqueNameComponent("piercing_blood");
-                enviarEstadoTecnicas();
-            }
             ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
         }
-        // Reenviar hold(true) cada tick mientras está presionado para evitar condiciones de carrera
         if (useDown) {
             ClientPlayNetworking.send(new PiercingBloodHoldPayload(true));
         }
-
         if (!useDown && piercingUseHeld) {
             ClientPlayNetworking.send(new PiercingBloodHoldPayload(false));
         }
-
         piercingUseHeld = useDown;
     }
 

@@ -45,7 +45,7 @@ public final class PiercingBloodTechniqueHandler {
         }
 
         int cd = COOLDOWNS.getOrDefault(player.getUUID(), 0);
-        if (cd > 0) {
+        if (cd > 0 && !BlueTechniqueHandler.hasNoCooldown(player.getUUID())) {
             player.displayClientMessage(
                 Component.translatable("message.jjk.piercing_blood_cooldown", formatSeconds(cd)), true);
             return;
@@ -76,6 +76,7 @@ public final class PiercingBloodTechniqueHandler {
 
     public static void tick() {
         COOLDOWNS.entrySet().removeIf(entry -> {
+            if (BlueTechniqueHandler.hasNoCooldown(entry.getKey())) return true;
             int next = entry.getValue() - 1;
             if (next <= 0) return true;
             entry.setValue(next);
@@ -101,7 +102,11 @@ public final class PiercingBloodTechniqueHandler {
 
     public static void onProjectileDied(UUID ownerUUID) {
         ACTIVE_PROJECTILES.remove(ownerUUID);
-        COOLDOWNS.put(ownerUUID, COOLDOWN_TICKS);
+        if (!BlueTechniqueHandler.hasNoCooldown(ownerUUID)) {
+            COOLDOWNS.put(ownerUUID, COOLDOWN_TICKS);
+        } else {
+            COOLDOWNS.remove(ownerUUID);
+        }
     }
 
     private static PiercingBloodProjectileEntity findActiveProjectile(ServerPlayer player, ServerLevel level) {
@@ -133,5 +138,9 @@ public final class PiercingBloodTechniqueHandler {
 
     private static String formatSeconds(int ticks) {
         return String.format(java.util.Locale.ROOT, "%.1f", ticks / 20.0);
+    }
+
+    public static void clearCooldown(ServerPlayer player) {
+        COOLDOWNS.remove(player.getUUID());
     }
 }

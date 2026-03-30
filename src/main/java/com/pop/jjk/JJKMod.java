@@ -70,6 +70,19 @@ public class JJKMod implements ModInitializer {
             .noLootTable()
             .build(ResourceKey.create(Registries.ENTITY_TYPE, PIERCING_BLOOD_ID))
     );
+    public static final Identifier SUPERNOVA_ORB_ID = Identifier.fromNamespaceAndPath(MOD_ID, "supernova_orb");
+    public static final EntityType<SupernovaOrbProjectileEntity> SUPERNOVA_ORB_PROJECTILE = Registry.register(
+        BuiltInRegistries.ENTITY_TYPE,
+        SUPERNOVA_ORB_ID,
+        EntityType.Builder.<SupernovaOrbProjectileEntity>of(SupernovaOrbProjectileEntity::new, MobCategory.MISC)
+            .sized(0.2F, 0.2F)
+            .clientTrackingRange(16)
+            .updateInterval(1)
+            .fireImmune()
+            .noSave()
+            .noLootTable()
+            .build(ResourceKey.create(Registries.ENTITY_TYPE, SUPERNOVA_ORB_ID))
+    );
 
     @Override
     public void onInitialize() {
@@ -82,6 +95,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(PiercingBloodHoldPayload.TYPE, PiercingBloodHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(FlowingRedScaleUsePayload.TYPE, FlowingRedScaleUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(SupernovaUsePayload.TYPE, SupernovaUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(SupernovaHoldPayload.TYPE, SupernovaHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(CharacterStatePayload.TYPE, CharacterStatePayload.STREAM_CODEC);
@@ -120,6 +134,9 @@ public class JJKMod implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(SupernovaUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> SupernovaTechniqueHandler.activate(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(SupernovaHoldPayload.TYPE, (payload, context) ->
+            context.server().execute(() -> SupernovaTechniqueHandler.onHold(context.player(), payload.holding()))
         );
         ServerPlayNetworking.registerGlobalReceiver(TechniqueSelectionPayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfinityTechniqueHandler.setInfinityEnabled(context.player(), payload.infinityEnabled()))

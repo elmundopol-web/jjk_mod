@@ -32,6 +32,14 @@ public final class JJKParticles {
     public static final SimpleParticleType BLUE_ORB_ATTRACTION =
         FabricParticleTypes.simple();
 
+    // Blood (Choso)
+    public static final SimpleParticleType BLOOD_CORE =
+        FabricParticleTypes.simple();
+    public static final SimpleParticleType BLOOD_TRAIL =
+        FabricParticleTypes.simple();
+    public static final SimpleParticleType BLOOD_EXPLOSION =
+        FabricParticleTypes.simple();
+
     public static void init() {
         register("blue_energy", BLUE_ENERGY);
         register("cursed_energy", CURSED_ENERGY);
@@ -41,6 +49,10 @@ public final class JJKParticles {
         register("blue_orb_core", BLUE_ORB_CORE);
         register("blue_orb_spark", BLUE_ORB_SPARK);
         register("blue_orb_attraction", BLUE_ORB_ATTRACTION);
+        // Blood
+        register("blood_core", BLOOD_CORE);
+        register("blood_trail", BLOOD_TRAIL);
+        register("blood_explosion", BLOOD_EXPLOSION);
     }
 
     private static void register(String name, SimpleParticleType type) {

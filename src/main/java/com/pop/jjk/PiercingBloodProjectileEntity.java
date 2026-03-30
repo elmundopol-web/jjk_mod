@@ -48,12 +48,6 @@ public class PiercingBloodProjectileEntity extends Projectile {
     static final float  MIN_DAMAGE       = 1.0F;
     static final float  PIERCE_KNOCKBACK = 0.20F;
 
-    private static final DustParticleOptions BEAM_CORE    = new DustParticleOptions(0xFF0505, 0.36F);
-    private static final DustParticleOptions BEAM_BODY    = new DustParticleOptions(0xCC0000, 0.78F);
-    private static final DustParticleOptions BEAM_GLOW    = new DustParticleOptions(0x880000, 1.40F);
-    private static final DustParticleOptions IMPACT_BURST = new DustParticleOptions(0xFF2020, 1.20F);
-    private static final DustParticleOptions IMPACT_CHUNK = new DustParticleOptions(0xBB0000, 2.00F);
-    private static final DustParticleOptions IMPACT_MIST  = new DustParticleOptions(0xDD0505, 0.50F);
     private static final DustParticleOptions BREAK_DUST   = new DustParticleOptions(0xFF4040, 0.65F);
 
     private final Set<UUID> hitEntityIds = new HashSet<>();
@@ -314,76 +308,46 @@ public class PiercingBloodProjectileEntity extends Projectile {
         double segLen = from.distanceTo(to);
         if (segLen < 0.05) return;
         Vec3 delta = to.subtract(from);
-        // Un único trazo continuo: un punto cada ~0.12 bloques para apariencia de línea sólida
-        int steps = Math.max(1, (int)(segLen / 0.12));
+        // Trazo continuo con alta densidad: puntos cada ~0.10 bloques (más sólido y volumétrico)
+        int steps = Math.max(1, (int)(segLen / 0.10));
         for (int i = 0; i <= steps; i++) {
             double t = (double) i / steps;
             Vec3 p   = from.add(delta.scale(t));
-            // Una sola familia de partículas para evitar líneas duplicadas
-            level.sendParticles(BEAM_BODY, p.x, p.y, p.z, 1, 0.020, 0.020, 0.020, 0.0);
+            // Nueva partícula trail (fullbright + turbulencia) para línea viva y con bloom
+            level.sendParticles(JJKParticles.BLOOD_TRAIL, p.x, p.y, p.z, 1, 0.0, 0.0, 0.0, 0.0);
+            // Refuerzo del halo en alta intensidad (pocas unidades para no saturar)
+            if (intensity > 0.6F && (i % 5 == 0)) {
+                level.sendParticles(JJKParticles.BLOOD_CORE, p.x, p.y, p.z, 1, 0.0, 0.0, 0.0, 0.0);
+            }
         }
     }
 
-    private static void spawnBeamTrail(ServerLevel level, Vec3 from, Vec3 to, float intensity) {
-        double segLen = from.distanceTo(to);
-        if (segLen < 0.001) return;
-        Vec3 delta = to.subtract(from);
-
-        // Paso del haz: aumenta al debilitarse → menos partículas cuando lento
-        double particleStep = 0.16 + 0.30 * (1.0 - intensity);
-        int steps = Math.max(1, (int)(segLen / particleStep));
-
-        for (int i = 0; i <= steps; i++) {
-            double t = (double) i / steps;
-            Vec3 p   = from.add(delta.scale(t));
-            level.sendParticles(BEAM_CORE, p.x, p.y, p.z, 1, 0.008, 0.008, 0.008, 0.0);
-            if (intensity > 0.25f) {
-                level.sendParticles(BEAM_BODY, p.x, p.y, p.z, 1, 0.028, 0.028, 0.028, 0.0);
-            }
-        }
-
-        // Halo exterior: sólo cuando el rayo tiene suficiente energía
-        if (intensity > 0.35f) {
-            int glowSteps = Math.max(1, steps / 3);
-            for (int i = 0; i <= glowSteps; i++) {
-                double t = (double) i / glowSteps;
-                Vec3 p   = from.add(delta.scale(t));
-                level.sendParticles(BEAM_GLOW, p.x, p.y, p.z, 1, 0.055, 0.055, 0.055, 0.0);
-            }
-        }
-
-        // Dispersión lateral escala con intensidad
-        int scatter = (int)(segLen * 1.5 * intensity);
-        if (scatter > 0) {
-            level.sendParticles(BEAM_CORE, from.x, from.y, from.z, scatter, 0.05, 0.05, 0.05, 0.012);
-        }
-    }
 
     private static void spawnBloodExplosion(ServerLevel level, Vec3 center, Vec3 dir) {
         Vec3 fwd = dir.scale(0.22);
-        level.sendParticles(IMPACT_BURST,
+        // Estallido denso y brillante
+        level.sendParticles(JJKParticles.BLOOD_EXPLOSION,
             center.x + fwd.x, center.y + fwd.y, center.z + fwd.z,
-            18, 0.12, 0.18, 0.12, 0.14);
-        level.sendParticles(IMPACT_CHUNK, center.x, center.y, center.z,
-            10, 0.28, 0.32, 0.28, 0.16);
-        level.sendParticles(IMPACT_MIST,  center.x, center.y, center.z,
-            12, 0.15, 0.20, 0.15, 0.0);
-        level.sendParticles(IMPACT_BURST,
-            center.x, center.y + 0.2, center.z,
-            6, 0.08, 0.05, 0.08, 0.18);
+            10, 0.10, 0.10, 0.10, 0.0);
+        level.sendParticles(JJKParticles.BLOOD_EXPLOSION, center.x, center.y, center.z,
+            12, 0.18, 0.18, 0.18, 0.0);
+        // Núcleos rojos para glow volumétrico
+        level.sendParticles(JJKParticles.BLOOD_CORE, center.x, center.y, center.z,
+            3, 0.05, 0.05, 0.05, 0.0);
     }
 
     private static void spawnLaunchBurst(ServerLevel level, Vec3 origin, Vec3 dir) {
         Vec3 fwd = dir.scale(0.15);
-        level.sendParticles(IMPACT_BURST,
+        level.sendParticles(JJKParticles.BLOOD_CORE,
             origin.x + fwd.x, origin.y + fwd.y, origin.z + fwd.z,
-            10, 0.04, 0.04, 0.04, 0.06);
-        level.sendParticles(BEAM_GLOW, origin.x, origin.y, origin.z, 6, 0.08, 0.08, 0.08, 0.02);
+            4, 0.04, 0.04, 0.04, 0.0);
+        level.sendParticles(JJKParticles.BLOOD_TRAIL, origin.x, origin.y, origin.z,
+            6, 0.06, 0.06, 0.06, 0.0);
     }
 
     private static void spawnTrailEnd(ServerLevel level, Vec3 pos) {
-        level.sendParticles(IMPACT_BURST, pos.x, pos.y, pos.z, 7, 0.10, 0.10, 0.10, 0.05);
-        level.sendParticles(BEAM_GLOW,   pos.x, pos.y, pos.z, 4, 0.14, 0.14, 0.14, 0.0);
+        level.sendParticles(JJKParticles.BLOOD_EXPLOSION, pos.x, pos.y, pos.z, 8, 0.10, 0.10, 0.10, 0.0);
+        level.sendParticles(JJKParticles.BLOOD_CORE,      pos.x, pos.y, pos.z, 3, 0.06, 0.06, 0.06, 0.0);
     }
 
     private static double distancePointToSegment(Vec3 point, Vec3 a, Vec3 b) {

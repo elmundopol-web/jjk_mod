@@ -28,8 +28,8 @@ public final class BlueOrbCoreParticle extends JJKBaseParticle {
     // Config: glow grande, blanco→azul, alpha medio para blending aditivo
     private static final JJKParticleConfig CONFIG = JJKParticleConfig.builder()
         .colorGradient(
-            0.85F, 0.95F, 1.0F,    // start: blanco-azulado (centro caliente)
-            0.3F,  0.55F, 1.0F     // end: azul eléctrico (enfriamiento)
+            0.96F, 0.98F, 1.0F,    // start: casi blanco (fiel al núcleo brillante del sprite)
+            0.78F, 0.90F, 1.0F     // end: azul cielo luminoso (paleta del orb render)
         )
         .scale(0.55F, 0.15F)       // grande → encoge al morir
         .alpha(0.65F, 0.0F)        // alpha medio para que se sumen entre sí

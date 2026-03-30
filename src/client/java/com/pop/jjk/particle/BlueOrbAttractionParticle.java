@@ -31,8 +31,8 @@ public final class BlueOrbAttractionParticle extends JJKBaseParticle {
 
     private static final JJKParticleConfig CONFIG = JJKParticleConfig.builder()
         .colorGradient(
-            0.3F,  0.6F,  1.0F,    // start: azul medio (lejos)
-            0.8F,  0.93F, 1.0F     // end: blanco-azul brillante (cerca = caliente)
+            0.50F, 0.78F, 1.0F,    // start: azul sprite
+            0.90F, 0.97F, 1.0F     // end: casi blanco
         )
         .scale(0.10F, 0.02F)       // media → desvanece
         .alpha(0.8F, 0.0F)
