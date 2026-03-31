@@ -45,8 +45,10 @@ public final class SupernovaTechniqueHandler {
                 player.displayClientMessage(Component.translatable("message.jjk.supernova_cooldown", formatSeconds(cd)), true);
                 return;
             }
-            HOLDS.computeIfAbsent(id, k -> new HoldState((ServerLevel) player.level()));
-            ((ServerLevel) player.level()).playSound(null, player.blockPosition(), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.6F, 1.6F);
+            HoldState prev = HOLDS.putIfAbsent(id, new HoldState((ServerLevel) player.level()));
+            if (prev == null) {
+                ((ServerLevel) player.level()).playSound(null, player.blockPosition(), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.6F, 1.6F);
+            }
         } else {
             HoldState state = HOLDS.remove(id);
             if (state != null) {

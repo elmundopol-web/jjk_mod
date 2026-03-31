@@ -75,6 +75,8 @@ public class JJKClientMod implements ClientModInitializer {
             this.chargingStarted = phase == BlueAnimSyncPayload.PHASE_CHARGING;
         }
 
+    }
+
     private static void handleSupernovaHoldInput(Minecraft client) {
         boolean canInteract = client.player != null && client.screen == null;
         AbilityHotbarEntry entry = getSelectedAbilityEntry();
@@ -105,6 +107,7 @@ public class JJKClientMod implements ClientModInitializer {
         EntityRenderers.register(JJKMod.RED_PROJECTILE, RedProjectileRenderer::new);
         EntityRenderers.register(JJKMod.PURPLE_PROJECTILE, PurpleProjectileRenderer::new);
         EntityRenderers.register(JJKMod.PIERCING_BLOOD_PROJECTILE, PiercingBloodRenderer::new);
+        EntityRenderers.register(JJKMod.SUPERNOVA_ORB_PROJECTILE, SupernovaOrbRenderer::new);
 
         ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ENERGY,
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueEnergyParticle::new));
