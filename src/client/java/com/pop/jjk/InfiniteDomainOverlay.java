@@ -48,6 +48,13 @@ public final class InfiniteDomainOverlay {
             if (state.remainingTicks <= 0) {
                 iterator.remove();
             }
+            // Suavizado de entrada/salida y progreso
+            float targetInside = getInsideFactor(client, state);
+            float inLerp = targetInside > state.smoothedFactor ? 0.08F : 0.12F;
+            state.smoothedFactor += (targetInside - state.smoothedFactor) * inLerp;
+
+            float targetProgress = getProgressFactor(state);
+            state.smoothedProgress += (targetProgress - state.smoothedProgress) * 0.04F;
         }
     }
 
@@ -81,6 +88,34 @@ public final class InfiniteDomainOverlay {
         }
 
         return getProgressFactor(state);
+    }
+
+    public static float getSmoothedFactor() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || ACTIVE_DOMAINS.isEmpty()) {
+            return 0.0F;
+        }
+
+        DomainVisualState state = getStrongestDomain(client);
+        if (state == null) {
+            return 0.0F;
+        }
+
+        return Mth.clamp(state.smoothedFactor, 0.0F, 1.0F);
+    }
+
+    public static float getSmoothedProgress() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || ACTIVE_DOMAINS.isEmpty()) {
+            return 0.0F;
+        }
+
+        DomainVisualState state = getStrongestDomain(client);
+        if (state == null) {
+            return 0.0F;
+        }
+
+        return Mth.clamp(state.smoothedProgress, 0.0F, 1.0F);
     }
 
     private static DomainVisualState getStrongestDomain(Minecraft client) {
@@ -120,6 +155,8 @@ public final class InfiniteDomainOverlay {
         private final double centerZ;
         private final float radius;
         private int remainingTicks;
+        private float smoothedFactor;
+        private float smoothedProgress;
 
         private DomainVisualState(double centerX, double centerY, double centerZ, float radius, int remainingTicks) {
             this.centerX = centerX;
@@ -127,6 +164,8 @@ public final class InfiniteDomainOverlay {
             this.centerZ = centerZ;
             this.radius = radius;
             this.remainingTicks = remainingTicks;
+            this.smoothedFactor = 0.0F;
+            this.smoothedProgress = 0.0F;
         }
     }
 }

@@ -124,8 +124,19 @@ public final class InfiniteDomainTechniqueHandler {
             applyDomainParalysis(domain, paralyzedThisTick);
             spawnAmbientParticles(domain);
 
+            // Screen shake sutil para todos los jugadores dentro del dominio cada 2 ticks
+            if (domain.ageTicks % 2 == 0) {
+                for (ServerPlayer p : domain.level.getPlayers(pl -> isInsideDomain(pl, domain))) {
+                    ServerPlayNetworking.send(p, new ScreenShakePayload(0.3F, 3));
+                }
+            }
+
             if (domain.remainingTicks % 40 == 0) {
                 domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 0.7F, 0.7F);
+            }
+
+            if (domain.remainingTicks % 60 == 0) {
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, 0.15F, 1.2F);
             }
 
             if (domain.remainingTicks <= 0) {
@@ -491,19 +502,50 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void spawnAmbientParticles(ActiveDomain domain) {
-        if (domain.remainingTicks % 4 != 0) {
-            return;
+        // Volumen interior: END_ROD dispersas (energía suspendida) cada 2 ticks
+        if (domain.ageTicks % 2 == 0) {
+            int count = 18;
+            double height = Math.max(0.0D, domain.ceilingY - domain.floorY);
+            for (int i = 0; i < count; i++) {
+                double r = DOMAIN_RADIUS * Math.sqrt(domain.level.random.nextDouble());
+                double a = domain.level.random.nextDouble() * Math.PI * 2.0D;
+                double x = domain.center.x + Math.cos(a) * r;
+                double z = domain.center.z + Math.sin(a) * r;
+                double y = domain.floorY + 0.5D + domain.level.random.nextDouble() * Math.max(0.0D, height - 1.0D);
+                domain.level.sendParticles(ParticleTypes.END_ROD, x, y, z, 1, 0.04D, 0.06D, 0.04D, 0.0D);
+            }
         }
 
-        for (int i = 0; i < 16; i++) {
-            double angle = (Math.PI * 2.0D * i) / 16.0D + domain.remainingTicks * 0.035D;
-            double x = domain.center.x + Math.cos(angle) * DOMAIN_RADIUS;
-            double z = domain.center.z + Math.sin(angle) * DOMAIN_RADIUS;
-            domain.level.sendParticles(ParticleTypes.SQUID_INK, x, domain.center.y + 0.25D, z, 2, 0.18D, 0.9D, 0.18D, 0.01D);
+        // Columnas ascendentes desde el suelo hacia el centro cada 3 ticks
+        if (domain.ageTicks % 3 == 0) {
+            int columns = 6;
+            for (int i = 0; i < columns; i++) {
+                double r = DOMAIN_RADIUS * (0.3D + 0.6D * domain.level.random.nextDouble());
+                double a = (Math.PI * 2.0D * i) / columns + domain.ageTicks * 0.07D;
+                double x = domain.center.x + Math.cos(a) * r;
+                double z = domain.center.z + Math.sin(a) * r;
+                double y = domain.floorY + 0.6D;
+                boolean alt = ((domain.ageTicks / 3) + i) % 2 == 0;
+                if (alt) {
+                    domain.level.sendParticles(ParticleTypes.REVERSE_PORTAL, x, y, z, 3, 0.06D, 0.8D, 0.06D, 0.0D);
+                } else {
+                    domain.level.sendParticles(ParticleTypes.SONIC_BOOM, x, y, z, 1, 0.02D, 0.6D, 0.02D, 0.0D);
+                }
+            }
         }
 
-        domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 2.5D, domain.center.z, 12, DOMAIN_RADIUS * 0.55D, 1.6D, DOMAIN_RADIUS * 0.55D, 0.002D);
-        domain.level.sendParticles(ParticleTypes.SMOKE, domain.center.x, domain.center.y + 1.1D, domain.center.z, 4, 0.8D, 0.4D, 0.8D, 0.003D);
+        // Anillo perimetral y bruma interior suave cada 4 ticks (efecto existente)
+        if (domain.ageTicks % 4 == 0) {
+            for (int i = 0; i < 16; i++) {
+                double angle = (Math.PI * 2.0D * i) / 16.0D + domain.remainingTicks * 0.035D;
+                double x = domain.center.x + Math.cos(angle) * DOMAIN_RADIUS;
+                double z = domain.center.z + Math.sin(angle) * DOMAIN_RADIUS;
+                domain.level.sendParticles(ParticleTypes.SQUID_INK, x, domain.center.y + 0.25D, z, 2, 0.18D, 0.9D, 0.18D, 0.01D);
+            }
+
+            domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 2.5D, domain.center.z, 12, DOMAIN_RADIUS * 0.55D, 1.6D, DOMAIN_RADIUS * 0.55D, 0.002D);
+            domain.level.sendParticles(ParticleTypes.SMOKE, domain.center.x, domain.center.y + 1.1D, domain.center.z, 4, 0.8D, 0.4D, 0.8D, 0.003D);
+        }
     }
 
     private static String formatSeconds(int ticks) {

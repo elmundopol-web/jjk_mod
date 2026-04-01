@@ -20,7 +20,7 @@ public abstract class InfiniteDomainLevelRendererMixin {
     )
     private void jjk$blackenSkyProgressively(ClientLevel level, float partialTick, Camera camera, SkyRenderState state, CallbackInfo ci) {
         float visualFactor = Mth.clamp(
-            InfiniteDomainOverlay.getInsideFactor() * InfiniteDomainOverlay.getProgressFactor(),
+            InfiniteDomainOverlay.getSmoothedFactor() * InfiniteDomainOverlay.getSmoothedProgress(),
             0.0F,
             1.0F
         );
@@ -35,6 +35,17 @@ public abstract class InfiniteDomainLevelRendererMixin {
         state.rainBrightness *= keepFactor;
         state.endFlashIntensity *= keepFactor;
         state.shouldRenderDarkDisc = true;
+
+        if (visualFactor > 0.5F) {
+            try {
+                java.lang.reflect.Field f = SkyRenderState.class.getDeclaredField("cloudColor");
+                f.setAccessible(true);
+                int black = 0x000000;
+                f.setInt(state, black);
+            } catch (NoSuchFieldException | IllegalAccessException ignored) {
+                // Campo opcional: solo si existe
+            }
+        }
     }
 
     private static int scaleRgb(int color, float factor) {

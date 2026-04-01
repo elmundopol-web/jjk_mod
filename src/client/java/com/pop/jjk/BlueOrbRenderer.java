@@ -50,6 +50,7 @@ public class BlueOrbRenderer extends EntityRenderer<BlueOrbEntity, BlueOrbRender
         super.extractRenderState(entity, renderState, partialTick);
         renderState.power = entity.getPower();
         renderState.launched = entity.isLaunched();
+        renderState.animTime = renderState.ageInTicks + partialTick;
 
         com.pop.jjk.particle.effect.ParticleEffectManager.updateGravityWell(
             entity.getId(),
@@ -82,7 +83,7 @@ public class BlueOrbRenderer extends EntityRenderer<BlueOrbEntity, BlueOrbRender
      */
     @Override
     public void submit(BlueOrbRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState cameraRenderState) {
-        float t = renderState.ageInTicks;
+        float t = renderState.animTime;
         float p = Mth.clamp(renderState.power, 0.0F, 1.0F);
 
         // --- BREATHING: pulsación orgánica de dos frecuencias ---

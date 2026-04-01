@@ -20,8 +20,8 @@ public final class JJKRoster {
         registerTechnique("diverging_fist", "technique.jjk.diverging_fist", "technique.jjk.diverging_fist_desc", "technique.jjk.diverging_fist_hint", 0xE7A95F, true);
         registerTechnique("black_flash", "technique.jjk.black_flash", "technique.jjk.black_flash_desc", "technique.jjk.black_flash_hint", 0x2C2C2C, false);
         registerTechnique("rush_combo", "technique.jjk.rush_combo", "technique.jjk.rush_combo_desc", "technique.jjk.rush_combo_hint", 0xD95F43, false);
-        registerTechnique("dismantle", "technique.jjk.dismantle", "technique.jjk.dismantle_desc", "technique.jjk.dismantle_hint", 0xC94848, false);
-        registerTechnique("cleave", "technique.jjk.cleave", "technique.jjk.cleave_desc", "technique.jjk.cleave_hint", 0xF08080, false);
+        registerTechnique("dismantle", "technique.jjk.dismantle", "technique.jjk.dismantle_desc", "technique.jjk.dismantle_hint", 0xC94848, true);
+        registerTechnique("cleave", "technique.jjk.cleave", "technique.jjk.cleave_desc", "technique.jjk.cleave_hint", 0xF08080, true);
         registerTechnique("malevolent_shrine", "technique.jjk.malevolent_shrine", "technique.jjk.malevolent_shrine_desc", "technique.jjk.malevolent_shrine_hint", 0x8B2A2A, false);
         registerTechnique("divine_dog", "technique.jjk.divine_dog", "technique.jjk.divine_dog_desc", "technique.jjk.divine_dog_hint", 0x8AA5C7, false);
         registerTechnique("nue", "technique.jjk.nue", "technique.jjk.nue_desc", "technique.jjk.nue_hint", 0x7282D8, false);

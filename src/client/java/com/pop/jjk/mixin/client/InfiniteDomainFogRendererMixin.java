@@ -18,11 +18,16 @@ public abstract class InfiniteDomainFogRendererMixin {
     )
     private Vector4f jjk$blackFogColor(Vector4f color) {
         float visualFactor = Mth.clamp(
-            InfiniteDomainOverlay.getInsideFactor() * InfiniteDomainOverlay.getProgressFactor(),
+            InfiniteDomainOverlay.getSmoothedFactor() * InfiniteDomainOverlay.getSmoothedProgress(),
             0.0F,
             1.0F
         );
         if (visualFactor <= 0.0F) {
+            return color;
+        }
+
+        if (visualFactor >= 0.95F) {
+            color.set(0.0F, 0.0F, 0.0F, 1.0F);
             return color;
         }
 
@@ -38,7 +43,7 @@ public abstract class InfiniteDomainFogRendererMixin {
     )
     private float jjk$compressFogDistance(float renderDistanceBlocks) {
         float visualFactor = Mth.clamp(
-            InfiniteDomainOverlay.getInsideFactor() * InfiniteDomainOverlay.getProgressFactor(),
+            InfiniteDomainOverlay.getSmoothedFactor() * InfiniteDomainOverlay.getSmoothedProgress(),
             0.0F,
             1.0F
         );
