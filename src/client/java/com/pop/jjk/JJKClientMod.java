@@ -51,6 +51,7 @@ public class JJKClientMod implements ClientModInitializer {
     private static boolean blueUseHeld = false;
     private static boolean piercingUseHeld = false;
     private static boolean supernovaUseHeld = false;
+    private static boolean fugaUseHeld = false;
     private static String tecnicaActivaId = JJKRoster.NONE;
     private static Component tecnicaActivaNombre = NO_TECHNIQUE_NAME;
     private static boolean infinitoActivo = false;
@@ -60,6 +61,7 @@ public class JJKClientMod implements ClientModInitializer {
     private static int cooldownRemaining = 0;
     private static int cooldownTotal = 0;
     private static long cooldownReceivedTick = 0;
+    private static int fugaSkyTintTicks = 0;
 
     // Blue player animation state (client-side)
     private static final Map<Integer, BluePlayerAnimState> blueAnimStates = new HashMap<>();
@@ -75,6 +77,96 @@ public class JJKClientMod implements ClientModInitializer {
             this.chargingStarted = phase == BlueAnimSyncPayload.PHASE_CHARGING;
         }
 
+    }
+
+    private static void spawnFugaExplosionFX(Minecraft client, double x, double y, double z, float radius) {
+        if (client.level == null) return;
+        net.minecraft.client.multiplayer.ClientLevel level = client.level;
+        // Fogonazo central moderado
+        for (int i = 0; i < 28; i++) {
+            double ox = (level.random.nextDouble() - 0.5) * (radius * 0.6);
+            double oy = (level.random.nextDouble() - 0.5) * (radius * 0.4);
+            double oz = (level.random.nextDouble() - 0.5) * (radius * 0.6);
+            level.addParticle(JJKParticles.FIRE_EXPLOSION, x + ox, y + oy, z + oz, 0.0, 0.0, 0.0);
+        }
+        // Anillos de fuego (2 anillos, baja densidad)
+        for (int ring = 0; ring < 2; ring++) {
+            double r = radius * (0.65 + ring * 0.22);
+            int points = 16;
+            for (int i = 0; i < points; i++) {
+                double a = (Math.PI * 2.0 * i) / points;
+                double px = x + Math.cos(a) * r;
+                double pz = z + Math.sin(a) * r;
+                double py = y + (level.random.nextDouble() - 0.5) * (radius * 0.10);
+                level.addParticle(JJKParticles.FIRE_TRAIL, px, py, pz, 0.0, 0.02, 0.0);
+            }
+        }
+    }
+
+    private static void spawnFugaBeamFX(Minecraft client,
+                                        double x1, double y1, double z1,
+                                        double x2, double y2, double z2) {
+        if (client.level == null) return;
+        net.minecraft.client.multiplayer.ClientLevel level = client.level;
+        double dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+        double len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (len < 0.01) return;
+        int steps = Math.max(1, (int) (len / 0.42));
+        double sx = dx / steps, sy = dy / steps, sz = dz / steps;
+        // Dirección normalizada y eje lateral para "fuego por los lados" (menos denso)
+        double vx = dx / len, vy = dy / len, vz = dz / len;
+        double rx = -vz, ry = 0.0, rz = vx;
+        double rlen = Math.sqrt(rx*rx + rz*rz);
+        if (rlen < 1.0E-3) { rx = 1.0; rz = 0.0; rlen = 1.0; }
+        rx /= rlen; rz /= rlen;
+        for (int i = 0; i <= steps; i++) {
+            double px = x1 + sx * i;
+            double py = y1 + sy * i;
+            double pz = z1 + sz * i;
+            // Cuerpo del rayo (intercalado para bajar densidad)
+            if ((i & 1) == 0) {
+                level.addParticle(JJKParticles.FIRE_BEAM, px, py, pz, 0.0, 0.0, 0.0);
+            } else if ((i % 4) == 0) {
+                level.addParticle(JJKParticles.FIRE_TRAIL, px, py, pz, 0.0, 0.0, 0.0);
+            }
+            // Llamas laterales esporádicas
+            if ((i % 5) == 0) {
+                double off = 0.42 + (client.level.random.nextDouble() * 0.32);
+                double lx = px + rx * off;
+                double lz = pz + rz * off;
+                double rx2 = px - rx * off;
+                double rz2 = pz - rz * off;
+                level.addParticle(JJKParticles.FIRE_TRAIL, lx, py, lz, 0.0, 0.015, 0.0);
+                level.addParticle(JJKParticles.FIRE_TRAIL, rx2, py, rz2, 0.0, 0.015, 0.0);
+            }
+        }
+    }
+
+    private static void handleFugaHoldInput(Minecraft client) {
+        boolean canInteract = client.player != null && client.screen == null;
+        AbilityHotbarEntry entry = getSelectedAbilityEntry();
+
+        boolean isFugaActive = "fuga".equals(tecnicaActivaId);
+        boolean allowByHotbar = shouldCaptureAbilityInput(client)
+            && (isFugaActive || (entry != null && "fuga".equals(entry.id())));
+
+        boolean inputDown = client.options.keyUse.isDown();
+        boolean useDown = canInteract && allowByHotbar && inputDown;
+
+        if (useDown && !fugaUseHeld) {
+            // iniciar carga y marcar hold (transición a true)
+            // auto-seleccionar Fuga para garantizar captura del input
+            tecnicaActivaId = "fuga";
+            tecnicaActivaNombre = getTechniqueNameComponent("fuga");
+            enviarEstadoTecnicas();
+            ClientPlayNetworking.send(FugaUsePayload.INSTANCE);
+            ClientPlayNetworking.send(new FugaHoldPayload(true));
+        }
+        // transición a false en release
+        if (!useDown && fugaUseHeld) {
+            ClientPlayNetworking.send(new FugaHoldPayload(false));
+        }
+        fugaUseHeld = useDown;
     }
 
     private static void handleSupernovaHoldInput(Minecraft client) {
@@ -134,6 +226,15 @@ public class JJKClientMod implements ClientModInitializer {
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodTrailParticle::new));
         ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_EXPLOSION,
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodExplosionParticle::new));
+        // Fire (Fuga)
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_CHARGE,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireChargeParticle::new));
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_BEAM,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireBeamParticle::new));
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_TRAIL,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireTrailParticle::new));
+        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_EXPLOSION,
+            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireExplosionParticle::new));
 
         abrirMenu = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "key.jjk.open_menu",
@@ -167,6 +268,17 @@ public class JJKClientMod implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ScreenShakePayload.TYPE, (payload, context) ->
             context.client().execute(() -> ScreenShakeManager.trigger(payload.intensity(), payload.durationTicks()))
         );
+        ClientPlayNetworking.registerGlobalReceiver(FugaBeamFXPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> spawnFugaBeamFX(Minecraft.getInstance(),
+                payload.x1(), payload.y1(), payload.z1(), payload.x2(), payload.y2(), payload.z2()))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(FugaOverchargeSyncPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> fugaSkyTintTicks = Math.max(fugaSkyTintTicks, payload.durationTicks()))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(FugaExplosionFXPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> spawnFugaExplosionFX(Minecraft.getInstance(),
+                payload.x(), payload.y(), payload.z(), payload.radius()))
+        );
         ClientPlayNetworking.registerGlobalReceiver(BlueAnimSyncPayload.TYPE, (payload, context) ->
             context.client().execute(() -> {
                 if (payload.phase() == BlueAnimSyncPayload.PHASE_STOP) {
@@ -183,6 +295,7 @@ public class JJKClientMod implements ClientModInitializer {
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
         HudRenderCallback.EVENT.register(CursedEnergyOverlay::render);
+        HudRenderCallback.EVENT.register(JJKClientMod::renderFugaSkyTint);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ScreenShakeManager.tick();
@@ -214,7 +327,26 @@ public class JJKClientMod implements ClientModInitializer {
             handleBlueHoldInput(client);
             handlePiercingHoldInput(client);
             handleSupernovaHoldInput(client);
+            handleFugaHoldInput(client);
+            if (fugaSkyTintTicks > 0) fugaSkyTintTicks--;
         });
+    }
+
+    private static void renderFugaSkyTint(net.minecraft.client.gui.GuiGraphics graphics, net.minecraft.client.DeltaTracker delta) {
+        if (fugaSkyTintTicks <= 0) return;
+        int w = graphics.guiWidth();
+        int h = graphics.guiHeight();
+        float f = Math.min(1.0F, fugaSkyTintTicks / 120.0F);
+        int alphaTop = (int)(f * 95);   // más suave que antes
+        int alphaMid = (int)(f * 45);
+        int colorTop = ((alphaTop & 0xFF) << 24) | 0x00CC3A0A; // rojizo-anaranjado
+        int colorMid = ((alphaMid & 0xFF) << 24) | 0x00CC3A0A;
+        int skyH = (int)(h * 0.55);
+        int midH = (int)(h * 0.18);
+        // Cielo (parte superior)
+        graphics.fill(0, 0, w, skyH, colorTop);
+        // Transición cerca del horizonte
+        graphics.fill(0, skyH, w, Math.min(h, skyH + midH), colorMid);
     }
 
     public static void confirmCharacterSelection(String newCharacterId, Minecraft client) {
@@ -479,7 +611,7 @@ public class JJKClientMod implements ClientModInitializer {
     }
 
     private static boolean shouldCaptureAbilityInput(Minecraft client) {
-        return shouldRenderAbilityHotbar(client);
+        return client.player != null && client.screen == null && hasSelectedCharacter();
     }
 
     private static void handleBlueHoldInput(Minecraft client) {
@@ -746,6 +878,9 @@ public class JJKClientMod implements ClientModInitializer {
         selectedAbilityIndex = 0;
         infoKeyHeld = false;
         blueUseHeld = false;
+        piercingUseHeld = false;
+        supernovaUseHeld = false;
+        fugaUseHeld = false;
         tecnicaActivaId = JJKRoster.NONE;
         tecnicaActivaNombre = NO_TECHNIQUE_NAME;
         infinitoActivo = false;

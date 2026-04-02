@@ -40,6 +40,16 @@ public final class JJKParticles {
     public static final SimpleParticleType BLOOD_EXPLOSION =
         FabricParticleTypes.simple();
 
+    // Fire (Fuga)
+    public static final SimpleParticleType FIRE_CHARGE =
+        FabricParticleTypes.simple();
+    public static final SimpleParticleType FIRE_BEAM =
+        FabricParticleTypes.simple();
+    public static final SimpleParticleType FIRE_TRAIL =
+        FabricParticleTypes.simple();
+    public static final SimpleParticleType FIRE_EXPLOSION =
+        FabricParticleTypes.simple();
+
     public static void init() {
         register("blue_energy", BLUE_ENERGY);
         register("cursed_energy", CURSED_ENERGY);
@@ -53,6 +63,11 @@ public final class JJKParticles {
         register("blood_core", BLOOD_CORE);
         register("blood_trail", BLOOD_TRAIL);
         register("blood_explosion", BLOOD_EXPLOSION);
+        // Fire (Fuga)
+        register("fire_charge", FIRE_CHARGE);
+        register("fire_beam", FIRE_BEAM);
+        register("fire_trail", FIRE_TRAIL);
+        register("fire_explosion", FIRE_EXPLOSION);
     }
 
     private static void register(String name, SimpleParticleType type) {

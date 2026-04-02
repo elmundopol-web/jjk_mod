@@ -21,6 +21,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,25 +36,15 @@ import java.util.UUID;
  */
 public class FugaProjectileEntity extends Projectile {
 
-    // Ajustables para balance
-    private static final int CHARGE_TICKS = 12;
-    private static final int MAX_FLIGHT_TICKS = 30;
-    private static final double SPEED = 2.8;
-    private static final double MAX_DISTANCE = 44.0;
-    private static final double PATH_RADIUS = 1.15;          // grosor del rayo
-    private static final double IGNITE_RADIUS = 0.9;         // ignición de bloques/entidades cercana al eje
-    private static final double IMPACT_RADIUS = 8.0;         // radio de explosión
-    private static final float PATH_DAMAGE = 10.0F;          // daño por contacto con el rayo
-    private static final float IMPACT_DAMAGE = 26.0F;        // daño en la explosión final
-    private static final double KNOCKBACK = 1.25;            // empuje en explosión
-
-    private static final DustParticleOptions FIRE_CORE = new DustParticleOptions(0xFF7A00, 1.35F);
-    private static final DustParticleOptions FIRE_GLOW = new DustParticleOptions(0xFFA040, 1.10F);
+    // Ajustables a través de FugaTechnique
+    private static final int MAX_FLIGHT_TICKS = (int) Math.ceil(FugaTechnique.MAX_DISTANCE / FugaTechnique.SPEED) + 6;
 
     private double distanceTravelled = 0.0;
     private int ticksSinceLaunch = 0;
     private boolean launched = false;
     private final Set<UUID> hitEntities = new HashSet<>();
+    private final Deque<BlockPos> ignitionQueue = new ArrayDeque<>();
+    private float chargePower = 0.0F; // 0..1
 
     public FugaProjectileEntity(EntityType<? extends FugaProjectileEntity> type, Level level) {
         super(type, level);
@@ -101,44 +93,20 @@ public class FugaProjectileEntity extends Projectile {
             return;
         }
 
-        if (!launched) {
-            tickCharge(level, owner);
-            return;
-        }
-
+        if (!launched) { return; }
         tickFlight(level, owner);
     }
 
-    private void tickCharge(ServerLevel level, ServerPlayer owner) {
+    public void launchFrom(ServerPlayer owner) {
+        if (!(this.level() instanceof ServerLevel level)) return;
         Vec3 dir = owner.getLookAngle().normalize();
         Vec3 anchor = computePalmAnchor(owner, dir);
-        this.setPos(anchor);
-        this.setDeltaMovement(Vec3.ZERO);
-        this.setYRot(owner.getYRot());
-        this.setXRot(owner.getXRot());
-
-        // Sonido de preparación
-        if (this.tickCount == 1) {
-            level.playSound(null, anchor.x, anchor.y, anchor.z, SoundEvents.BLAZE_SHOOT, SoundSource.PLAYERS, 0.7F, 1.6F);
-        }
-
-        // Partículas de carga muy brillantes
-        double spread = 0.12 + (this.tickCount * 0.01);
-        level.sendParticles(FIRE_GLOW, anchor.x, anchor.y, anchor.z, 6, spread, spread * 0.55, spread, 0.0);
-        level.sendParticles(FIRE_CORE, anchor.x, anchor.y, anchor.z, 3, spread * 0.6, spread * 0.4, spread * 0.6, 0.0);
-        level.sendParticles(ParticleTypes.FLAME, anchor.x, anchor.y, anchor.z, 4, spread * 0.5, spread * 0.5, spread * 0.5, 0.01);
-
-        if (this.tickCount >= CHARGE_TICKS) {
-            launch(level, owner, anchor, dir);
-        }
-    }
-
-    private void launch(ServerLevel level, ServerPlayer owner, Vec3 anchor, Vec3 dir) {
         this.launched = true;
         this.ticksSinceLaunch = 0;
+        this.distanceTravelled = 0.0;
         Vec3 start = anchor.add(dir.scale(1.0));
         this.setPos(start);
-        this.setDeltaMovement(dir.scale(SPEED));
+        this.setDeltaMovement(dir.scale(effSpeed()));
         this.setYRot(owner.getYRot());
         this.setXRot(owner.getXRot());
         level.playSound(null, start.x, start.y, start.z, SoundEvents.FIRECHARGE_USE, SoundSource.PLAYERS, 1.0F, 0.95F);
@@ -150,7 +118,7 @@ public class FugaProjectileEntity extends Projectile {
         if (vel.lengthSqr() < 1.0E-6) { finish(level, owner); return; }
 
         Vec3 from = this.position();
-        double remain = MAX_DISTANCE - this.distanceTravelled;
+        double remain = effMaxDistance() - this.distanceTravelled;
         if (remain <= 0.0 || this.ticksSinceLaunch >= MAX_FLIGHT_TICKS) { finish(level, owner); return; }
 
         Vec3 movement = vel.length() > remain ? vel.normalize().scale(remain) : vel;
@@ -160,15 +128,26 @@ public class FugaProjectileEntity extends Projectile {
         burnEntitiesAlongPath(level, from, to, owner, vel.normalize());
         // Encender bloques y, en menor medida, romper blandos
         igniteBlocksAlongPath(level, from, to);
-        // Partículas volumétricas del rayo
-        spawnBeamParticles(level, from, to);
+        // FX del rayo (cliente del dueño) — minimizar carga: cada 2 ticks
+        if ((this.ticksSinceLaunch & 1) == 0) {
+            sendBeamFX(level, owner, from, to);
+        }
 
         // Avanzar
         this.setPos(to);
         this.distanceTravelled += movement.length();
         this.ticksSinceLaunch++;
 
-        if (this.distanceTravelled >= MAX_DISTANCE || this.ticksSinceLaunch >= MAX_FLIGHT_TICKS) {
+        // Procesar igniciones distribuidas para evitar picos de lag
+        int igniteBudget = 16 + (int) (chargePower * 16);
+        while (igniteBudget-- > 0 && !ignitionQueue.isEmpty()) {
+            BlockPos pos = ignitionQueue.pollFirst();
+            if (pos != null && canPlaceFireAt(level, pos)) {
+                level.setBlock(pos, Blocks.FIRE.defaultBlockState(), 11);
+            }
+        }
+
+        if (this.distanceTravelled >= effMaxDistance() || this.ticksSinceLaunch >= MAX_FLIGHT_TICKS) {
             finish(level, owner);
         }
     }
@@ -180,47 +159,66 @@ public class FugaProjectileEntity extends Projectile {
     }
 
     private void burnEntitiesAlongPath(ServerLevel level, Vec3 from, Vec3 to, ServerPlayer owner, Vec3 dir) {
-        AABB area = new AABB(from, to).inflate(PATH_RADIUS + 0.6);
+        double pr = effPathRadius();
+        AABB area = new AABB(from, to).inflate(pr + 0.6);
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, area, ent -> ent.isAlive() && ent != this.getOwner())) {
             Vec3 c = e.position().add(0.0, e.getBbHeight() * 0.5, 0.0);
-            if (distancePointToSegment(c, from, to) > PATH_RADIUS) continue;
+            if (distancePointToSegment(c, from, to) > pr) continue;
             if (!hitEntities.add(e.getUUID())) continue;
 
+            float dmg = effPathDamage();
             if (owner != null) {
-                e.hurtServer(level, level.damageSources().playerAttack(owner), PATH_DAMAGE);
+                e.hurtServer(level, level.damageSources().playerAttack(owner), dmg);
             } else {
-                e.hurtServer(level, level.damageSources().magic(), PATH_DAMAGE);
+                e.hurtServer(level, level.damageSources().magic(), dmg);
             }
             e.push(dir.x * 0.35, 0.08, dir.z * 0.35);
             e.hurtMarked = true;
             // Encender durante unos segundos
             e.setRemainingFireTicks(120);
-            level.sendParticles(ParticleTypes.LAVA, c.x, c.y, c.z, 3, 0.1, 0.1, 0.1, 0.02);
+            level.sendParticles(JJKParticles.FIRE_TRAIL, c.x, c.y, c.z, 2, 0.08, 0.08, 0.08, 0.0);
         }
     }
 
     private void igniteBlocksAlongPath(ServerLevel level, Vec3 from, Vec3 to) {
-        AABB sweep = new AABB(from, to).inflate(IGNITE_RADIUS + 0.6);
+        double ir = effIgniteRadius();
+        AABB sweep = new AABB(from, to).inflate(ir + 0.6);
         List<BlockPos> candidates = new ArrayList<>();
+        Vec3 d = to.subtract(from);
+        double dlen = d.length();
+        double sx = 0.0, sz = 0.0;
+        if (dlen > 1.0E-4) {
+            Vec3 nd = d.scale(1.0 / dlen);
+            // vector lateral en XZ: (-dz, 0, dx)
+            sx = -nd.z;
+            sz = nd.x;
+        }
         for (BlockPos pos : BlockPos.betweenClosed(
             BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
             BlockPos.containing(sweep.maxX, sweep.maxY, sweep.maxZ)
         )) {
             BlockPos p = pos.immutable();
             Vec3 pc = p.getCenter();
-            if (distancePointToSegment(pc, from, to) > IGNITE_RADIUS + 0.35) continue;
+            if (distancePointToSegment(pc, from, to) > ir + 0.35) continue;
+            // Paridad para reducir densidad de escaneo sin perder cobertura
+            if (((p.getX() ^ p.getZ()) & 1) != (this.ticksSinceLaunch & 1)) continue;
             candidates.add(p);
+            // Añadir laterales cuando hay dirección válida
+            if (dlen > 1.0E-4 && level.random.nextFloat() < 0.60F) {
+                BlockPos left = BlockPos.containing(pc.x + sx, pc.y, pc.z + sz);
+                BlockPos right = BlockPos.containing(pc.x - sx, pc.y, pc.z - sz);
+                candidates.add(left);
+                candidates.add(right);
+            }
         }
-
-        int ignited = 0;
+        // Añadir a la cola para encendido diferido y suave
+        int toQueue = 56; // más alto pero diferido para espectáculo
         for (BlockPos pos : candidates) {
-            if (ignited >= 8) break;
-            // Preferir encender el bloque de aire si el de abajo es sólido
+            if (toQueue-- <= 0) break;
             BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
             if (place == null) continue;
-            if (level.random.nextFloat() > 0.45F) continue;
-            level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
-            ignited++;
+            if (level.random.nextFloat() > 0.40F) continue; // más abundante
+            if (ignitionQueue.size() < 256) ignitionQueue.addLast(place);
         }
     }
 
@@ -235,66 +233,103 @@ public class FugaProjectileEntity extends Projectile {
         level.playSound(null, center.x, center.y, center.z, SoundEvents.GENERIC_EXPLODE, SoundSource.PLAYERS, 1.6F, 0.85F);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.FIRECHARGE_USE, SoundSource.PLAYERS, 1.3F, 0.72F);
         spawnExplosionParticles(level, center);
+        sendExplosionFX(level, owner, center, (float) effImpactRadius());
         sendShakeToNearby(level, center, 5.5F, 14);
 
         // Daño, empuje e ignición en área
-        AABB burst = new AABB(center, center).inflate(IMPACT_RADIUS + 0.5);
+        double irad = effImpactRadius();
+        float kb = effKnockback();
+        float idmg = effImpactDamage();
+        AABB burst = new AABB(center, center).inflate(irad + 0.5);
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, burst, ent -> ent.isAlive() && ent != this.getOwner())) {
             double dist = e.position().distanceTo(center);
-            if (dist > IMPACT_RADIUS + 0.8) continue;
-            Vec3 push = e.position().subtract(center).normalize().scale(KNOCKBACK);
+            if (dist > irad + 0.8) continue;
+            Vec3 push = e.position().subtract(center).normalize().scale(kb);
             e.push(push.x, 0.25 + (push.y * 0.1), push.z);
             e.hurtMarked = true;
             if (owner != null) {
-                e.hurtServer(level, level.damageSources().playerAttack(owner), IMPACT_DAMAGE);
+                e.hurtServer(level, level.damageSources().playerAttack(owner), idmg);
             } else {
-                e.hurtServer(level, level.damageSources().magic(), IMPACT_DAMAGE);
+                e.hurtServer(level, level.damageSources().magic(), idmg);
             }
             e.setRemainingFireTicks(160);
         }
 
-        // Encender el área con manchas de fuego
-        int r = Mth.ceil(IMPACT_RADIUS);
-        BlockPos cpos = BlockPos.containing(center);
-        for (BlockPos pos : BlockPos.betweenClosed(cpos.offset(-r, -r, -r), cpos.offset(r, r, r))) {
-            if (pos.getCenter().distanceTo(center) > IMPACT_RADIUS + 0.6) continue;
-            if (level.random.nextFloat() > 0.18F) continue;
+        // Encender el área con muestreo aleatorio (evitar freeze por triple-bucle gigante)
+        int samples = (int) (180 + 80 * chargePower);
+        BlockPos base = BlockPos.containing(center);
+        for (int i = 0; i < samples; i++) {
+            double theta = level.random.nextDouble() * Math.PI * 2.0;
+            double phi = Math.acos(level.random.nextDouble() * 2.0 - 1.0);
+            double rr = level.random.nextDouble() * (irad + 0.6);
+            int ox = (int) Math.round(rr * Math.sin(phi) * Math.cos(theta));
+            int oy = (int) Math.round(rr * Math.cos(phi));
+            int oz = (int) Math.round(rr * Math.sin(phi) * Math.sin(theta));
+            BlockPos pos = base.offset(ox, oy, oz);
+            if (pos.getCenter().distanceTo(center) > irad + 0.6) continue;
             BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
-            if (place != null) {
+            if (place != null && level.random.nextFloat() < 0.65F) {
                 level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
             }
         }
     }
 
-    private static void spawnBeamParticles(ServerLevel level, Vec3 from, Vec3 to) {
-        Vec3 delta = to.subtract(from);
-        double len = delta.length();
-        if (len < 0.05) return;
-        int steps = Math.max(1, (int) (len / 0.35));
-        Vec3 step = delta.scale(1.0 / steps);
-        for (int i = 0; i <= steps; i++) {
-            Vec3 p = from.add(step.scale(i));
-            level.sendParticles(FIRE_CORE, p.x, p.y, p.z, 4, 0.25, 0.15, 0.25, 0.0);
-            level.sendParticles(FIRE_GLOW, p.x, p.y, p.z, 4, 0.32, 0.18, 0.32, 0.0);
-            if ((i % 2) == 0) {
-                level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, 3, 0.14, 0.14, 0.14, 0.01);
-                level.sendParticles(ParticleTypes.LAVA, p.x, p.y, p.z, 1, 0.10, 0.10, 0.10, 0.02);
-            }
-        }
+    private static void sendBeamFX(ServerLevel level, ServerPlayer owner, Vec3 from, Vec3 to) {
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(owner,
+            new FugaBeamFXPayload(from.x, from.y, from.z, to.x, to.y, to.z));
     }
 
     private static void spawnExplosionParticles(ServerLevel level, Vec3 center) {
-        level.sendParticles(FIRE_CORE, center.x, center.y, center.z, 90, 2.0, 1.6, 2.0, 0.0);
-        level.sendParticles(FIRE_GLOW, center.x, center.y, center.z, 70, 1.6, 1.3, 1.6, 0.0);
-        level.sendParticles(ParticleTypes.FLAME, center.x, center.y, center.z, 120, 2.2, 1.8, 2.2, 0.02);
-        level.sendParticles(ParticleTypes.LAVA, center.x, center.y, center.z, 20, 1.2, 1.0, 1.2, 0.0);
-        level.sendParticles(ParticleTypes.EXPLOSION, center.x, center.y, center.z, 6, 1.5, 1.5, 1.5, 0.0);
-        level.sendParticles(ParticleTypes.SMOKE, center.x, center.y, center.z, 18, 1.4, 1.2, 1.4, 0.03);
+        level.sendParticles(JJKParticles.FIRE_EXPLOSION, center.x, center.y, center.z, 120, 2.2, 1.8, 2.2, 0.0);
+        level.sendParticles(JJKParticles.FIRE_TRAIL, center.x, center.y, center.z, 40, 1.2, 1.0, 1.2, 0.0);
+    }
+
+    private static void sendExplosionFX(ServerLevel level, ServerPlayer owner, Vec3 center, float radius) {
+        if (owner != null) {
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(owner,
+                new FugaExplosionFXPayload(center.x, center.y, center.z, radius));
+        }
     }
 
     private static Vec3 computePalmAnchor(ServerPlayer owner, Vec3 dir) {
         // Aproximación de palma: un poco por delante de la cara y levemente abajo
         return owner.getEyePosition().add(dir.scale(0.85)).add(0.0, -0.28, 0.0);
+    }
+
+    public void setChargePower(float power) {
+        this.chargePower = Mth.clamp(power, 0.0F, 1.0F);
+    }
+
+    private double effMaxDistance() {
+        return FugaTechnique.MAX_DISTANCE + (FugaTechnique.OVR_MAX_DISTANCE - FugaTechnique.MAX_DISTANCE) * chargePower;
+    }
+
+    private double effSpeed() {
+        return FugaTechnique.SPEED + (FugaTechnique.OVR_SPEED - FugaTechnique.SPEED) * chargePower;
+    }
+
+    private double effPathRadius() {
+        return FugaTechnique.PATH_RADIUS + (FugaTechnique.OVR_PATH_RADIUS - FugaTechnique.PATH_RADIUS) * chargePower;
+    }
+
+    private double effIgniteRadius() {
+        return FugaTechnique.IGNITE_RADIUS + (FugaTechnique.OVR_IGNITE_RADIUS - FugaTechnique.IGNITE_RADIUS) * chargePower;
+    }
+
+    private float effPathDamage() {
+        return FugaTechnique.PATH_DAMAGE + (FugaTechnique.OVR_PATH_DAMAGE - FugaTechnique.PATH_DAMAGE) * chargePower;
+    }
+
+    private float effImpactDamage() {
+        return FugaTechnique.IMPACT_DAMAGE + (FugaTechnique.OVR_IMPACT_DAMAGE - FugaTechnique.IMPACT_DAMAGE) * chargePower;
+    }
+
+    private double effImpactRadius() {
+        return FugaTechnique.IMPACT_RADIUS + (FugaTechnique.OVR_IMPACT_RADIUS - FugaTechnique.IMPACT_RADIUS) * chargePower;
+    }
+
+    private float effKnockback() {
+        return (float)(FugaTechnique.KNOCKBACK + (FugaTechnique.OVR_KNOCKBACK - FugaTechnique.KNOCKBACK) * chargePower);
     }
 
     private static double distancePointToSegment(Vec3 point, Vec3 a, Vec3 b) {

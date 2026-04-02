@@ -125,6 +125,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(DismantleUsePayload.TYPE, DismantleUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CleaveUsePayload.TYPE, CleaveUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(FugaUsePayload.TYPE, FugaUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(FugaHoldPayload.TYPE, FugaHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(CharacterStatePayload.TYPE, CharacterStatePayload.STREAM_CODEC);
@@ -133,6 +134,9 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(ScreenShakePayload.TYPE, ScreenShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(BlueAnimSyncPayload.TYPE, BlueAnimSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(InfiniteDomainSyncPayload.TYPE, InfiniteDomainSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(FugaBeamFXPayload.TYPE, FugaBeamFXPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(FugaOverchargeSyncPayload.TYPE, FugaOverchargeSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(FugaExplosionFXPayload.TYPE, FugaExplosionFXPayload.STREAM_CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BlueTechniqueUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> {
                 if (payload.holding()) {
@@ -176,6 +180,9 @@ public class JJKMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(FugaUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> FugaTechniqueHandler.activate(context.player()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(FugaHoldPayload.TYPE, (payload, context) ->
+            context.server().execute(() -> FugaTechniqueHandler.onHold(context.player(), payload.holding()))
+        );
         ServerPlayNetworking.registerGlobalReceiver(TechniqueSelectionPayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfinityTechniqueHandler.setInfinityEnabled(context.player(), payload.infinityEnabled()))
         );
@@ -198,6 +205,7 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> SupernovaTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> DismantleTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> CleaveTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(server -> FugaTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> InfinityTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlueTechniqueHandler.clearActive());
@@ -208,6 +216,7 @@ public class JJKMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> SupernovaTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DismantleTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CleaveTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());
 
