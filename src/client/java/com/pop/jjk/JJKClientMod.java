@@ -109,6 +109,7 @@ public class JJKClientMod implements ClientModInitializer {
         EntityRenderers.register(JJKMod.PIERCING_BLOOD_PROJECTILE, PiercingBloodRenderer::new);
         EntityRenderers.register(JJKMod.SUPERNOVA_ORB_PROJECTILE, SupernovaOrbRenderer::new);
         EntityRenderers.register(JJKMod.DISMANTLE_PROJECTILE, DismantleProjectileRenderer::new);
+        EntityRenderers.register(JJKMod.FUGA_PROJECTILE, FugaProjectileRenderer::new);
 
         ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ENERGY,
             sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueEnergyParticle::new));
@@ -713,6 +714,12 @@ public class JJKClientMod implements ClientModInitializer {
 
         if ("cleave".equals(tecnicaId)) {
             ClientPlayNetworking.send(CleaveUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
+        if ("fuga".equals(tecnicaId)) {
+            ClientPlayNetworking.send(FugaUsePayload.INSTANCE);
             enfriamientoUsoTicks = USE_BUFFER_TICKS;
             return;
         }

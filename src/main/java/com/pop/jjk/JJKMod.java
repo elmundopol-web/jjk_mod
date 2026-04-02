@@ -96,6 +96,19 @@ public class JJKMod implements ModInitializer {
             .noLootTable()
             .build(ResourceKey.create(Registries.ENTITY_TYPE, DISMANTLE_PROJECTILE_ID))
     );
+    public static final Identifier FUGA_PROJECTILE_ID = Identifier.fromNamespaceAndPath(MOD_ID, "fuga_projectile");
+    public static final EntityType<FugaProjectileEntity> FUGA_PROJECTILE = Registry.register(
+        BuiltInRegistries.ENTITY_TYPE,
+        FUGA_PROJECTILE_ID,
+        EntityType.Builder.<FugaProjectileEntity>of(FugaProjectileEntity::new, MobCategory.MISC)
+            .sized(0.6F, 0.6F)
+            .clientTrackingRange(20)
+            .updateInterval(1)
+            .fireImmune()
+            .noSave()
+            .noLootTable()
+            .build(ResourceKey.create(Registries.ENTITY_TYPE, FUGA_PROJECTILE_ID))
+    );
 
     @Override
     public void onInitialize() {
@@ -111,6 +124,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(SupernovaHoldPayload.TYPE, SupernovaHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DismantleUsePayload.TYPE, DismantleUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CleaveUsePayload.TYPE, CleaveUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(FugaUsePayload.TYPE, FugaUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(CharacterStatePayload.TYPE, CharacterStatePayload.STREAM_CODEC);
@@ -158,6 +172,9 @@ public class JJKMod implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(CleaveUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> CleaveTechniqueHandler.activate(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(FugaUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> FugaTechniqueHandler.activate(context.player()))
         );
         ServerPlayNetworking.registerGlobalReceiver(TechniqueSelectionPayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfinityTechniqueHandler.setInfinityEnabled(context.player(), payload.infinityEnabled()))

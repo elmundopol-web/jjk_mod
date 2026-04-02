@@ -26,7 +26,7 @@ public class DismantleProjectileEntity extends Projectile {
 
     static final double SPEED = 4.0;
     static final double MAX_RANGE = 30.0;
-    static final double HIT_RADIUS = 0.50;
+    static final double HIT_RADIUS = 0.30;
     static final double BREAK_RADIUS = 0.35;
     static final int    BLOCKS_PER_TICK = 6;
     static final float  DAMAGE = 14.0F;

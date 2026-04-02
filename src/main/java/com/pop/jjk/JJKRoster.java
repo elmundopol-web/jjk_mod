@@ -22,6 +22,7 @@ public final class JJKRoster {
         registerTechnique("rush_combo", "technique.jjk.rush_combo", "technique.jjk.rush_combo_desc", "technique.jjk.rush_combo_hint", 0xD95F43, false);
         registerTechnique("dismantle", "technique.jjk.dismantle", "technique.jjk.dismantle_desc", "technique.jjk.dismantle_hint", 0xC94848, true);
         registerTechnique("cleave", "technique.jjk.cleave", "technique.jjk.cleave_desc", "technique.jjk.cleave_hint", 0xF08080, true);
+        registerTechnique("fuga", "technique.jjk.fuga", "technique.jjk.fuga_desc", "technique.jjk.fuga_hint", 0xFF7A00, true);
         registerTechnique("malevolent_shrine", "technique.jjk.malevolent_shrine", "technique.jjk.malevolent_shrine_desc", "technique.jjk.malevolent_shrine_hint", 0x8B2A2A, false);
         registerTechnique("divine_dog", "technique.jjk.divine_dog", "technique.jjk.divine_dog_desc", "technique.jjk.divine_dog_hint", 0x8AA5C7, false);
         registerTechnique("nue", "technique.jjk.nue", "technique.jjk.nue_desc", "technique.jjk.nue_hint", 0x7282D8, false);
@@ -34,7 +35,7 @@ public final class JJKRoster {
 
         registerCharacter("gojo", "character.jjk.gojo", "character.jjk.gojo_desc", 0x9EEBFF, List.of("blue", "red", "purple", "infinite_domain", "infinity"), true);
         registerCharacter("itadori", "character.jjk.itadori", "character.jjk.itadori_desc", 0xE78C5A, List.of("diverging_fist", "black_flash", "rush_combo"), false);
-        registerCharacter("sukuna", "character.jjk.sukuna", "character.jjk.sukuna_desc", 0xC44E4E, List.of("dismantle", "cleave", "malevolent_shrine"), false);
+        registerCharacter("sukuna", "character.jjk.sukuna", "character.jjk.sukuna_desc", 0xC44E4E, List.of("dismantle", "cleave", "fuga", "malevolent_shrine"), false);
         registerCharacter("megumi", "character.jjk.megumi", "character.jjk.megumi_desc", 0x6A84C8, List.of("divine_dog", "nue", "max_elephant"), false);
         registerCharacter("todo", "character.jjk.todo", "character.jjk.todo_desc", 0xD09C67, List.of("boogie_woogie", "black_flash", "close_quarters"), false);
         registerCharacter("choso", "character.jjk.choso", "character.jjk.choso_desc", 0xCC1010, List.of("piercing_blood", "flowing_red_scale", "supernova"), false);
