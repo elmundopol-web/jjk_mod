@@ -176,7 +176,7 @@ public final class DivergingFistTechniqueHandler {
     }
 
     private static void tickCooldowns() {
-        List<UUID> expired = new ArrayList<>();
+        List<UUID> expired = new java.util.ArrayList<>();
 
         for (java.util.Map.Entry<UUID, Integer> entry : COOLDOWNS.entrySet()) {
             int nextValue = entry.getValue() - 1;

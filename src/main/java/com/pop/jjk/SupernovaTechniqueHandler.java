@@ -83,7 +83,7 @@ public final class SupernovaTechniqueHandler {
                 continue;
             }
 
-            List<Integer> list = ORBS.computeIfAbsent(pid, k -> new ArrayList<>());
+            List<Integer> list = ORBS.computeIfAbsent(pid, k -> new java.util.ArrayList<>());
             if (state.spawnCooldown > 0) state.spawnCooldown--;
             int spawnInterval = Math.max(3, 10 - (state.ticks / 20) * 2);
             if (state.spawnCooldown <= 0 && list.size() < MAX_ORBS) {

@@ -44,7 +44,7 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         double vx = entity.getDeltaMovement().x;
         double vy = entity.getDeltaMovement().y;
         double vz = entity.getDeltaMovement().z;
-        float speed = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
+        float speed = (float) Math.sqrt((vx * vx) + (vy * vy) + (vz * vz));
         renderState.speed = speed;
         if (speed > 1.0E-3F) {
             float inv = 1.0F / speed;
@@ -54,20 +54,15 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         } else {
             renderState.vx = 0.0F;
             renderState.vy = 0.0F;
-            renderState.vz = 1.0F; // por defecto, hacia delante
+            renderState.vz = 1.0F;
         }
-        renderState.launched = speed > 0.02F;
-        if (!renderState.launched) {
-            float t = Math.min(entity.tickCount, FugaTechnique.OVERCHARGE_TICKS) / (float) FugaTechnique.OVERCHARGE_TICKS;
-            renderState.chargePower = Mth.clamp(t, 0.0F, 1.0F);
-        } else {
-            renderState.chargePower = 1.0F;
-        }
+        renderState.launched = entity.isLaunched();
+        renderState.chargePower = Mth.clamp(entity.getChargePower(), 0.0F, 1.0F);
     }
 
     @Override
     public void submit(FugaProjectileRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
-                       CameraRenderState cameraRenderState) {
+        CameraRenderState cameraRenderState) {
         if (renderState.launched) {
             submitBeam(renderState, poseStack, submitNodeCollector);
         } else {
@@ -76,25 +71,30 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         super.submit(renderState, poseStack, submitNodeCollector, cameraRenderState);
     }
 
-    private void submitChargeOrb(FugaProjectileRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState cameraRenderState) {
-        float t = renderState.ageInTicks;
-        float pulse = 0.3F + (0.2F * (0.5F + 0.5F * Mth.sin(t * 0.6F)));
+    private void submitChargeOrb(FugaProjectileRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector,
+        CameraRenderState cameraRenderState) {
+        float t = renderState.chargePower;
+        float pulse = 0.92F + (0.18F * Mth.sin(renderState.ageInTicks * 0.7F));
+        float baseScale = (0.24F + (0.88F * t)) * pulse;
+
+        int coreColor = lerpColor(0xFFC05010, 0xFFFFFFFF, t);
+        int glowColor = lerpColor(0xA0FF7A20, 0xC8FFF5D0, t);
+        int haloColor = lerpColor(0x70300000, 0x90FFF0C0, t);
 
         poseStack.pushPose();
         poseStack.mulPose(cameraRenderState.orientation);
-        submitOrbPlane(poseStack, submitNodeCollector, renderState, MAIN0, pulse * 1.00F, 0.0F, t * 10.0F, 0.0F, 0xFFFFFFFF);
-        submitOrbPlane(poseStack, submitNodeCollector, renderState, GLOW0, pulse * 1.10F, 0.0F, -t * 12.0F, t * 6.0F, 0x7CFFE0A0); // naranja suave
-        submitOrbPlane(poseStack, submitNodeCollector, renderState, GLOW1, pulse * 1.25F, 0.0F, t * 14.0F, -t * 8.0F, 0x58B00000); // halo rojo oscuro
+        submitOrbPlane(poseStack, submitNodeCollector, renderState, MAIN0, baseScale, 0.0F, renderState.ageInTicks * 14.0F, 0.0F, coreColor);
+        submitOrbPlane(poseStack, submitNodeCollector, renderState, GLOW0, baseScale * 1.16F, 0.0F, -renderState.ageInTicks * 11.0F, renderState.ageInTicks * 7.0F, glowColor);
+        submitOrbPlane(poseStack, submitNodeCollector, renderState, GLOW1, baseScale * 1.38F, 0.0F, renderState.ageInTicks * 18.0F, -renderState.ageInTicks * 9.0F, haloColor);
         poseStack.popPose();
     }
 
     private void submitBeam(FugaProjectileRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector) {
         float t = renderState.ageInTicks;
-        float width = 0.20F + (0.05F * (0.5F + 0.5F * Mth.sin(t * 8.0F)));
-        width = Mth.clamp(width, 0.15F, 0.25F);
-        float length = Mth.clamp(renderState.speed * 1.5F, 0.6F, 8.0F);
+        float width = 0.22F + (0.11F * renderState.chargePower) + (0.05F * (0.5F + (0.5F * Mth.sin(t * 8.0F))));
+        width = Mth.clamp(width, 0.18F, 0.38F);
+        float length = Mth.clamp(renderState.speed * (1.35F + (0.35F * renderState.chargePower)), 0.8F, 9.0F);
 
-        // orientar el quad a la dirección del movimiento
         float yawDeg = (float) (Math.atan2(renderState.vx, renderState.vz) * (180.0F / Math.PI));
         float pitchDeg = (float) (-Math.asin(renderState.vy) * (180.0F / Math.PI));
 
@@ -102,10 +102,9 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         poseStack.mulPose(Axis.YP.rotationDegrees(yawDeg));
         poseStack.mulPose(Axis.XP.rotationDegrees(pitchDeg));
 
-        // tres capas: centro blanco, borde naranja, halo rojo oscuro
-        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW0, width * 0.55F, length, 0xE6FFFFFF);
-        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW1, width * 1.00F, length, 0xCCFFA640);
-        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW1, width * 1.45F, length, 0x88B00000);
+        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW0, width * 0.50F, length, 0xF2FFFFFF);
+        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW1, width * 0.96F, length, 0xDDFFB050);
+        submitBeamLayer(poseStack, submitNodeCollector, renderState, GLOW1, width * 1.42F, length, 0x90B02000);
 
         poseStack.popPose();
     }
@@ -134,7 +133,8 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         poseStack.popPose();
     }
 
-    private static void submitBeamLayer(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, FugaProjectileRenderState renderState, RenderType renderType, float halfWidth, float length, int color) {
+    private static void submitBeamLayer(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, FugaProjectileRenderState renderState,
+        RenderType renderType, float halfWidth, float length, int color) {
         poseStack.pushPose();
         submitNodeCollector.submitCustomGeometry(
             poseStack,
@@ -156,7 +156,6 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
         float x1 = halfWidth;
         float z0 = 0.0F;
         float z1 = length;
-        // rectángulo alineado en Z
         vertexConsumer.addVertex(pose, x0, 0.0F, z0).setColor(color).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0.0F, 1.0F, 0.0F);
         vertexConsumer.addVertex(pose, x1, 0.0F, z0).setColor(color).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0.0F, 1.0F, 0.0F);
         vertexConsumer.addVertex(pose, x1, 0.0F, z1).setColor(color).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0.0F, 1.0F, 0.0F);
@@ -170,5 +169,13 @@ public class FugaProjectileRenderer extends EntityRenderer<FugaProjectileEntity,
             .setOverlay(OverlayTexture.NO_OVERLAY)
             .setLight(light)
             .setNormal(pose, 0.0F, 1.0F, 0.0F);
+    }
+
+    private static int lerpColor(int from, int to, float t) {
+        int a = Mth.lerpInt(t, (from >>> 24) & 0xFF, (to >>> 24) & 0xFF);
+        int r = Mth.lerpInt(t, (from >>> 16) & 0xFF, (to >>> 16) & 0xFF);
+        int g = Mth.lerpInt(t, (from >>> 8) & 0xFF, (to >>> 8) & 0xFF);
+        int b = Mth.lerpInt(t, from & 0xFF, to & 0xFF);
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 }

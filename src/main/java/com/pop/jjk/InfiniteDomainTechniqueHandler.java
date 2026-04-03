@@ -107,7 +107,7 @@ public final class InfiniteDomainTechniqueHandler {
     public static void tick(MinecraftServer server) {
         tickCooldowns(server);
 
-        Set<UUID> paralyzedThisTick = new HashSet<>();
+        Set<UUID> paralyzedThisTick = new java.util.HashSet<>();
         Iterator<Map.Entry<UUID, ActiveDomain>> iterator = ACTIVE_DOMAINS.entrySet().iterator();
 
         while (iterator.hasNext()) {

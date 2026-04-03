@@ -206,6 +206,7 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> DismantleTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> CleaveTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> FugaTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(server -> FugaProjectileEntity.tickPersistentFireZones(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> InfinityTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlueTechniqueHandler.clearActive());
@@ -217,6 +218,7 @@ public class JJKMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DismantleTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CleaveTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaProjectileEntity.clearPersistentFireZones());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());
 

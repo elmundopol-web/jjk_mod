@@ -1,32 +1,32 @@
-```
-# Build artifacts
-build/
-*.jar
-*.war
-*.class
-*.gradle/
-
-# Dependencies
+# Gradle
 .gradle/
-lib/
-libs/
+build/
+out/
+classes/
 
-# Logs and temp files
-*.log
-*.tmp
+# Eclipse / Java tooling
+bin/
+.classpath
+.project
+.settings/
+*.launch
 
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
+# IntelliJ / VS Code
 .idea/
-*.swp
-*.swo
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Fabric dev runtime
+run/
+
+# Java crash / profiling files
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
 
 # OS files
-.DS_Store
+*.DS_Store
 Thumbs.db
-```
