@@ -93,6 +93,11 @@ public class FugaProjectileEntity extends Projectile {
             return;
         }
 
+        if (this.tickCount > MAX_FLIGHT_TICKS + 20) {
+            this.discard();
+            return;
+        }
+
         if (!launched) { return; }
         tickFlight(level, owner);
     }
@@ -244,6 +249,14 @@ public class FugaProjectileEntity extends Projectile {
         float kb = effKnockback();
         float idmg = effImpactDamage();
         AABB burst = new AABB(center, center).inflate(irad + 0.5);
+        
+        // Calcular retroceso para el dueño (si no tiene Infinity)
+        boolean ownerHasInfinity = owner != null && InfinityTechniqueHandler.isActive(owner.getUUID());
+        Vec3 ownerPush = Vec3.ZERO;
+        if (owner != null && !ownerHasInfinity) {
+            ownerPush = owner.position().subtract(center).normalize().scale(kb * 0.6);
+        }
+        
         for (LivingEntity e : level.getEntitiesOfClass(LivingEntity.class, burst, ent -> ent.isAlive() && ent != this.getOwner())) {
             double dist = e.position().distanceTo(center);
             if (dist > irad + 0.8) continue;
@@ -257,11 +270,19 @@ public class FugaProjectileEntity extends Projectile {
             }
             e.setRemainingFireTicks(160);
         }
+        
+        // Aplicar retroceso al dueño
+        if (owner != null && !ownerHasInfinity && ownerPush.lengthSqr() > 0) {
+            owner.push(ownerPush.x, 0.15, ownerPush.z);
+            owner.hurtMarked = true;
+        }
 
         // Encender el área con muestreo aleatorio suavizado y presupuesto (evitar picos)
         int samples = (int) (120 + 40 * chargePower);
         int igniteBudget = 32 + (int) (24 * chargePower);
         BlockPos base = BlockPos.containing(center);
+        List<BlockPos> persistentFirePositions = new ArrayList<>();
+        
         for (int i = 0; i < samples; i++) {
             double theta = level.random.nextDouble() * Math.PI * 2.0;
             double phi = Math.acos(level.random.nextDouble() * 2.0 - 1.0);
@@ -275,7 +296,159 @@ public class FugaProjectileEntity extends Projectile {
             BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
             if (place != null && level.random.nextFloat() < 0.58F) {
                 level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
+                persistentFirePositions.add(place.immutable());
                 if (--igniteBudget <= 0) break;
+            }
+        }
+        
+        // Destrucción de bloques débiles en carga máxima (>80%)
+        if (chargePower >= 0.8F && owner != null) {
+            destroyWeakBlocks(level, center, irad, owner);
+        }
+        
+        // Crear zona de fuego persistente (10 segundos)
+        if (!persistentFirePositions.isEmpty()) {
+            createPersistentFireZone(level, persistentFirePositions, owner);
+        }
+    }
+    
+    /**
+     * Destruye bloques débiles (tierra, piedra, madera) en un radio amplio
+     */
+    private void destroyWeakBlocks(ServerLevel level, Vec3 center, double radius, ServerPlayer owner) {
+        BlockPos base = BlockPos.containing(center);
+        int blockDestructionBudget = 80 + (int)(40 * chargePower);
+        int destroyedCount = 0;
+        
+        // Muestreo esférico para encontrar bloques destructibles
+        for (int i = 0; i < 200 && destroyedCount < blockDestructionBudget; i++) {
+            double theta = level.random.nextDouble() * Math.PI * 2.0;
+            double phi = Math.acos(level.random.nextDouble() * 2.0 - 1.0);
+            double rr = level.random.nextDouble() * (radius * 0.9);
+            
+            int ox = (int) Math.round(rr * Math.sin(phi) * Math.cos(theta));
+            int oy = (int) Math.round(rr * Math.cos(phi));
+            int oz = (int) Math.round(rr * Math.sin(phi) * Math.sin(theta));
+            
+            BlockPos pos = base.offset(ox, oy, oz);
+            if (pos.getCenter().distanceTo(center) > radius * 0.9) continue;
+            
+            BlockState state = level.getBlockState(pos);
+            if (isWeakBlock(state)) {
+                // Romper bloque con efecto
+                level.destroyBlock(pos, false, owner);
+                level.sendParticles(ParticleTypes.BLOCK, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 
+                    4, 0.2, 0.2, 0.2, 0.1, Block.getId(state));
+                destroyedCount++;
+            }
+        }
+        
+        if (destroyedCount > 0) {
+            // Sonido adicional de destrucción
+            level.playSound(null, center.x, center.y, center.z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 0.8F, 0.6F);
+        }
+    }
+    
+    /**
+     * Verifica si un bloque es débil y puede ser destruido por Fuga
+     */
+    private boolean isWeakBlock(BlockState state) {
+        // Bloques que pueden ser destruidos: tierra, piedra, madera, etc.
+        return state.getBlock() == Blocks.STONE ||
+               state.getBlock() == Blocks.COBBLESTONE ||
+               state.getBlock() == Blocks.DIRT ||
+               state.getBlock() == Blocks.GRASS_BLOCK ||
+               state.getBlock() == Blocks.SAND ||
+               state.getBlock() == Blocks.GRAVEL ||
+               state.getBlock() == Blocks.OAK_LOG ||
+               state.getBlock() == Blocks.BIRCH_LOG ||
+               state.getBlock() == Blocks.SPRUCE_LOG ||
+               state.getBlock() == Blocks.JUNGLE_LOG ||
+               state.getBlock() == Blocks.ACACIA_LOG ||
+               state.getBlock() == Blocks.DARK_OAK_LOG ||
+               state.getBlock() == Blocks.OAK_PLANKS ||
+               state.getBlock() == Blocks.COBBLESTONE_WALL ||
+               state.getBlock() == Blocks.BRICKS ||
+               state.getBlock() == Blocks.NETHERRACK ||
+               state.getBlock() == Blocks.END_STONE;
+    }
+    
+    /**
+     * Crea una zona de fuego persistente que daña y ralentiza a los enemigos
+     */
+    private void createPersistentFireZone(ServerLevel level, List<BlockPos> firePositions, ServerPlayer owner) {
+        // Programar ticks de daño para la zona de fuego (10 segundos = 200 ticks)
+        int zoneDurationTicks = 200;
+        int damageIntervalTicks = 20; // Dañar cada segundo
+        
+        for (int tickOffset = damageIntervalTicks; tickOffset <= zoneDurationTicks; tickOffset += damageIntervalTicks) {
+            final int finalTickOffset = tickOffset;
+            level.schedule(() -> {
+                if (!level.isClientSide) {
+                    applyZoneDamage(level, firePositions, owner);
+                }
+            }, finalTickOffset);
+        }
+    }
+    
+    /**
+     * Aplica daño y ralentización en la zona de fuego persistente
+     */
+    private void applyZoneDamage(ServerLevel level, List<BlockPos> firePositions, ServerPlayer owner) {
+        Set<BlockPos> activePositions = new HashSet<>();
+        
+        // Verificar qué posiciones aún tienen fuego
+        for (BlockPos pos : firePositions) {
+            if (level.getBlockState(pos).getBlock() == Blocks.FIRE) {
+                activePositions.add(pos);
+            }
+        }
+        
+        if (activePositions.isEmpty()) return;
+        
+        // Buscar entidades cerca de cualquier fuego activo
+        AABB zoneBounds = null;
+        for (BlockPos pos : activePositions) {
+            AABB posBox = new AABB(pos).inflate(2.0);
+            if (zoneBounds == null) {
+                zoneBounds = posBox;
+            } else {
+                zoneBounds = zoneBounds.minmax(posBox);
+            }
+        }
+        
+        if (zoneBounds == null) return;
+        
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, zoneBounds, 
+                e -> e.isAlive() && e != owner && e.distanceToSqr(Vec3.atCenterOf(firePositions.get(0))) < 25)) {
+            
+            // Verificar si está cerca de algún fuego activo
+            boolean isInZone = false;
+            for (BlockPos pos : activePositions) {
+                if (entity.position().distanceToSqr(Vec3.atCenterOf(pos)) < 4.0) {
+                    isInZone = true;
+                    break;
+                }
+            }
+            
+            if (isInZone) {
+                // Daño por estar en la zona caliente
+                float zoneDamage = 1.5F + (chargePower * 1.0F);
+                if (owner != null) {
+                    entity.hurtServer(level, level.damageSources().playerAttack(owner), zoneDamage);
+                } else {
+                    entity.hurtServer(level, level.damageSources().magic(), zoneDamage);
+                }
+                
+                // Ralentización por el calor intenso
+                entity.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN, 
+                    40, 1, false, false, true));
+                
+                // Partículas de calor
+                Vec3 entityPos = entity.position();
+                level.sendParticles(JJKParticles.FIRE_TRAIL, entityPos.x, entityPos.y + 0.5, entityPos.z, 
+                    2, 0.3, 0.2, 0.3, 0.02);
             }
         }
     }

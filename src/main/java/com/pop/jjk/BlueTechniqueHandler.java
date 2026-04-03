@@ -19,6 +19,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Handler principal para la técnica Azul v2.
@@ -32,9 +34,9 @@ import java.util.*;
  */
 public final class BlueTechniqueHandler {
 
-    private static final List<ActiveBlue> ACTIVE_BLUES = new ArrayList<>();
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
-    private static final Set<UUID> NO_COOLDOWN = new HashSet<>();
+    private static final List<ActiveBlue> ACTIVE_BLUES = new CopyOnWriteArrayList<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Set<UUID> NO_COOLDOWN = ConcurrentHashMap.newKeySet();
 
     private BlueTechniqueHandler() {}
 

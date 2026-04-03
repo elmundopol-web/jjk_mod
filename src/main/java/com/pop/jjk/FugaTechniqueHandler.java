@@ -7,9 +7,10 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
 
 /**
  * Handler de técnica Open: Fuga con hold-to-release exacto.
@@ -18,7 +19,7 @@ import java.util.UUID;
  */
 public final class FugaTechniqueHandler {
 
-    private static final Map<UUID, HoldState> HOLDS = new HashMap<>();
+    private static final Map<UUID, HoldState> HOLDS = new ConcurrentHashMap<>();
 
     private FugaTechniqueHandler() {}
 
@@ -40,11 +41,7 @@ public final class FugaTechniqueHandler {
             }
             HoldState state = HOLDS.get(id);
             if (state == null) {
-                // Iniciar hold: consumir energía al inicio
-                if (!BlueTechniqueHandler.hasNoCooldown(id) && !CursedEnergyManager.consume(player, FugaTechnique.ENERGY_COST)) {
-                    player.displayClientMessage(Component.translatable("message.jjk.not_enough_energy"), true);
-                    return;
-                }
+                // Iniciar hold: NO consumir energía al inicio, se consume al lanzar según carga
                 ServerLevel level = (ServerLevel) player.level();
                 HOLDS.put(id, new HoldState(level));
                 // Sonido "Open" sutil
@@ -66,7 +63,7 @@ public final class FugaTechniqueHandler {
 
     public static void tick() {
         // Tick holds
-        for (Map.Entry<UUID, HoldState> entry : new HashMap<>(HOLDS).entrySet()) {
+        for (Map.Entry<UUID, HoldState> entry : new HashSet<>(HOLDS.entrySet())) {
             UUID pid = entry.getKey();
             HoldState state = entry.getValue();
             state.ticks++;
@@ -117,17 +114,31 @@ public final class FugaTechniqueHandler {
         if (state == null) return;
 
         ServerLevel level = (ServerLevel) player.level();
+        
+        // Calcular coste de energía según carga (20%-100% del coste base)
+        float chargePower = (float) Math.min(1.0, state.ticks / (double) FugaTechnique.OVERCHARGE_TICKS);
+        int energyCost = (int) (FugaTechnique.ENERGY_COST * (0.2F + 0.8F * chargePower));
+        
+        // Verificar y consumir energía
+        if (!BlueTechniqueHandler.hasNoCooldown(id) && !CursedEnergyManager.consume(player, energyCost)) {
+            player.displayClientMessage(Component.translatable("message.jjk.not_enough_energy"), true);
+            // Cancelar cooldown si no tenía energía
+            return;
+        }
+        
         FugaProjectileEntity proj = new FugaProjectileEntity(level, player);
-        float power = (float) Math.min(1.0, state.ticks / (double) FugaTechnique.OVERCHARGE_TICKS);
-        level.addFreshEntity(proj);
-        proj.setChargePower(power);
+        proj.setChargePower(chargePower);
         proj.launchFrom(player);
 
-        // Cooldown global
+        // Cooldown global (proporcional a la carga: 40%-100%)
         if (!BlueTechniqueHandler.hasNoCooldown(id)) {
-            BlueTechniqueHandler.setCooldown(id, FugaTechnique.COOLDOWN_TICKS);
-            BlueTechniqueHandler.syncCooldownToClient(player, FugaTechnique.COOLDOWN_TICKS, FugaTechnique.COOLDOWN_TICKS);
+            int cooldownTicks = (int) (FugaTechnique.COOLDOWN_TICKS * (0.4F + 0.6F * chargePower));
+            BlueTechniqueHandler.setCooldown(id, cooldownTicks);
+            BlueTechniqueHandler.syncCooldownToClient(player, cooldownTicks, cooldownTicks);
         }
+        
+        // Feedback visual del consumo
+        player.displayClientMessage(Component.literal("»Open: Fuga« liberado (" + String.format("%.0f", chargePower * 100) + "% carga)"), true);
     }
 
     private static void spawnChargeParticles(ServerLevel level, ServerPlayer player, int holdTicks) {

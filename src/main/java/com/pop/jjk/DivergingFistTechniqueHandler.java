@@ -1,8 +1,9 @@
 package com.pop.jjk;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
@@ -24,8 +25,8 @@ public final class DivergingFistTechniqueHandler {
     private static final double HIT_PUSH = 0.62;
     private static final float INITIAL_DAMAGE = 4.0F;
     private static final float DELAY_DAMAGE = 6.5F;
-    private static final List<PendingDivergingHit> PENDING_HITS = new ArrayList<>();
-    private static final java.util.Map<UUID, Integer> COOLDOWNS = new java.util.HashMap<>();
+    private static final List<PendingDivergingHit> PENDING_HITS = new CopyOnWriteArrayList<>();
+    private static final java.util.Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
 
     private DivergingFistTechniqueHandler() {
     }

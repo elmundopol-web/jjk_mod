@@ -1,8 +1,8 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -26,8 +26,8 @@ public final class FlowingRedScaleTechniqueHandler {
 
     private static final DustParticleOptions BLOOD_DUST = new DustParticleOptions(0xCC1010, 0.9F);
 
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
-    private static final Map<UUID, ActiveBuff> ACTIVE = new HashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, ActiveBuff> ACTIVE = new ConcurrentHashMap<>();
 
     private FlowingRedScaleTechniqueHandler() {
     }
