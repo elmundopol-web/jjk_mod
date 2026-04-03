@@ -128,8 +128,8 @@ public class FugaProjectileEntity extends Projectile {
         burnEntitiesAlongPath(level, from, to, owner, vel.normalize());
         // Encender bloques y, en menor medida, romper blandos
         igniteBlocksAlongPath(level, from, to);
-        // FX del rayo (cliente del dueño) — minimizar carga: cada 2 ticks
-        if ((this.ticksSinceLaunch & 1) == 0) {
+        // FX del rayo (cliente del dueño) — minimizar carga: cada 4 ticks
+        if ((this.ticksSinceLaunch & 3) == 0) {
             sendBeamFX(level, owner, from, to);
         }
 
@@ -139,7 +139,7 @@ public class FugaProjectileEntity extends Projectile {
         this.ticksSinceLaunch++;
 
         // Procesar igniciones distribuidas para evitar picos de lag
-        int igniteBudget = 16 + (int) (chargePower * 16);
+        int igniteBudget = 12 + (int) (chargePower * 10);
         while (igniteBudget-- > 0 && !ignitionQueue.isEmpty()) {
             BlockPos pos = ignitionQueue.pollFirst();
             if (pos != null && canPlaceFireAt(level, pos)) {
@@ -181,44 +181,47 @@ public class FugaProjectileEntity extends Projectile {
     }
 
     private void igniteBlocksAlongPath(ServerLevel level, Vec3 from, Vec3 to) {
+        if (ignitionQueue.size() > 512) return;
         double ir = effIgniteRadius();
-        AABB sweep = new AABB(from, to).inflate(ir + 0.6);
         List<BlockPos> candidates = new ArrayList<>();
         Vec3 d = to.subtract(from);
         double dlen = d.length();
-        double sx = 0.0, sz = 0.0;
-        if (dlen > 1.0E-4) {
-            Vec3 nd = d.scale(1.0 / dlen);
-            // vector lateral en XZ: (-dz, 0, dx)
-            sx = -nd.z;
-            sz = nd.x;
-        }
-        for (BlockPos pos : BlockPos.betweenClosed(
-            BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
-            BlockPos.containing(sweep.maxX, sweep.maxY, sweep.maxZ)
-        )) {
-            BlockPos p = pos.immutable();
-            Vec3 pc = p.getCenter();
-            if (distancePointToSegment(pc, from, to) > ir + 0.35) continue;
-            // Paridad para reducir densidad de escaneo sin perder cobertura
-            if (((p.getX() ^ p.getZ()) & 1) != (this.ticksSinceLaunch & 1)) continue;
-            candidates.add(p);
-            // Añadir laterales cuando hay dirección válida
-            if (dlen > 1.0E-4 && level.random.nextFloat() < 0.60F) {
-                BlockPos left = BlockPos.containing(pc.x + sx, pc.y, pc.z + sz);
-                BlockPos right = BlockPos.containing(pc.x - sx, pc.y, pc.z - sz);
-                candidates.add(left);
-                candidates.add(right);
+        if (dlen < 1.0E-4) return;
+
+        Vec3 nd = d.scale(1.0 / dlen);
+        double sx = -nd.z;
+        double sz = nd.x;
+        double slen = Math.sqrt(sx * sx + sz * sz);
+        if (slen < 1.0E-6) { sx = 1.0; sz = 0.0; slen = 1.0; }
+        sx /= slen; sz /= slen;
+
+        int segments = Math.max(1, (int) Math.ceil(dlen / 0.9));
+        for (int i = 0; i <= segments; i++) {
+            double t = (double) i / (double) segments;
+            Vec3 pc = from.add(nd.scale(t * dlen));
+
+            double[] rs = new double[] { 0.0, 0.9, -0.9, 1.8, -1.8 };
+            for (double r : rs) {
+                double offx = sx * r + (level.random.nextDouble() - 0.5) * 0.5;
+                double offz = sz * r + (level.random.nextDouble() - 0.5) * 0.5;
+                BlockPos p = BlockPos.containing(pc.x + offx, pc.y, pc.z + offz).immutable();
+                // Mantenernos dentro del radio efectivo para evitar igniciones lejanas
+                if (distancePointToSegment(p.getCenter(), from, to) > ir + 0.5) continue;
+                candidates.add(p);
+                if (level.random.nextFloat() < 0.35F) {
+                    candidates.add(p.above());
+                }
             }
         }
-        // Añadir a la cola para encendido diferido y suave
-        int toQueue = 56; // más alto pero diferido para espectáculo
+
+        int toQueue = Math.min(64, 12 + segments * 6);
         for (BlockPos pos : candidates) {
             if (toQueue-- <= 0) break;
             BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
             if (place == null) continue;
-            if (level.random.nextFloat() > 0.40F) continue; // más abundante
-            if (ignitionQueue.size() < 256) ignitionQueue.addLast(place);
+            float keepProb = 0.50F + 0.20F * this.chargePower;
+            if (level.random.nextFloat() > keepProb) continue;
+            if (ignitionQueue.size() < 640) ignitionQueue.addLast(place);
         }
     }
 
@@ -255,8 +258,9 @@ public class FugaProjectileEntity extends Projectile {
             e.setRemainingFireTicks(160);
         }
 
-        // Encender el área con muestreo aleatorio (evitar freeze por triple-bucle gigante)
-        int samples = (int) (180 + 80 * chargePower);
+        // Encender el área con muestreo aleatorio suavizado y presupuesto (evitar picos)
+        int samples = (int) (120 + 40 * chargePower);
+        int igniteBudget = 32 + (int) (24 * chargePower);
         BlockPos base = BlockPos.containing(center);
         for (int i = 0; i < samples; i++) {
             double theta = level.random.nextDouble() * Math.PI * 2.0;
@@ -267,9 +271,11 @@ public class FugaProjectileEntity extends Projectile {
             int oz = (int) Math.round(rr * Math.sin(phi) * Math.sin(theta));
             BlockPos pos = base.offset(ox, oy, oz);
             if (pos.getCenter().distanceTo(center) > irad + 0.6) continue;
+            if (((pos.getX() ^ pos.getZ()) & 1) != 0) continue;
             BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
-            if (place != null && level.random.nextFloat() < 0.65F) {
+            if (place != null && level.random.nextFloat() < 0.58F) {
                 level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
+                if (--igniteBudget <= 0) break;
             }
         }
     }
@@ -280,8 +286,8 @@ public class FugaProjectileEntity extends Projectile {
     }
 
     private static void spawnExplosionParticles(ServerLevel level, Vec3 center) {
-        level.sendParticles(JJKParticles.FIRE_EXPLOSION, center.x, center.y, center.z, 120, 2.2, 1.8, 2.2, 0.0);
-        level.sendParticles(JJKParticles.FIRE_TRAIL, center.x, center.y, center.z, 40, 1.2, 1.0, 1.2, 0.0);
+        level.sendParticles(JJKParticles.FIRE_EXPLOSION, center.x, center.y, center.z, 56, 2.2, 1.8, 2.2, 0.0);
+        level.sendParticles(JJKParticles.FIRE_TRAIL, center.x, center.y, center.z, 18, 1.2, 1.0, 1.2, 0.0);
     }
 
     private static void sendExplosionFX(ServerLevel level, ServerPlayer owner, Vec3 center, float radius) {

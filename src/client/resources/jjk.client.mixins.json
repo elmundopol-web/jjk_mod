@@ -5,6 +5,7 @@
 	"client": [
 		"InfiniteDomainFogRendererMixin",
 		"InfiniteDomainLevelRendererMixin",
+		"FugaSkyTintLevelRendererMixin",
 		"BlueFirstPersonTransformMixin",
 		"BluePlayerAnimMixin",
 		"CameraShakeMixin",

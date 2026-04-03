@@ -12,6 +12,7 @@ public final class InfiniteDomainOverlay {
 
     private static final int DOMAIN_DURATION_TICKS = 20 * 12;
     private static final int DOMAIN_BUILDUP_TICKS = 50;
+    private static final int DOMAIN_VISUAL_FADE_TICKS = 16;
     private static final Map<Integer, DomainVisualState> ACTIVE_DOMAINS = new HashMap<>();
 
     private InfiniteDomainOverlay() {
@@ -19,7 +20,10 @@ public final class InfiniteDomainOverlay {
 
     public static void handleSync(InfiniteDomainSyncPayload payload) {
         if (!payload.active() || payload.remainingTicks() <= 0) {
-            ACTIVE_DOMAINS.remove(payload.ownerEntityId());
+            DomainVisualState state = ACTIVE_DOMAINS.get(payload.ownerEntityId());
+            if (state != null) {
+                state.startFadeOut();
+            }
             return;
         }
 
@@ -44,11 +48,17 @@ public final class InfiniteDomainOverlay {
         Iterator<Map.Entry<Integer, DomainVisualState>> iterator = ACTIVE_DOMAINS.entrySet().iterator();
         while (iterator.hasNext()) {
             DomainVisualState state = iterator.next().getValue();
-            state.remainingTicks--;
-            if (state.remainingTicks <= 0) {
-                iterator.remove();
+            if (state.fadingOut) {
+                state.fadeTicksRemaining--;
+            } else {
+                state.remainingTicks--;
             }
-            // Suavizado de entrada/salida y progreso
+
+            if ((!state.fadingOut && state.remainingTicks <= 0) || (state.fadingOut && state.fadeTicksRemaining <= 0)) {
+                iterator.remove();
+                continue;
+            }
+
             float targetInside = getInsideFactor(client, state);
             float inLerp = targetInside > state.smoothedFactor ? 0.08F : 0.12F;
             state.smoothedFactor += (targetInside - state.smoothedFactor) * inLerp;
@@ -145,6 +155,10 @@ public final class InfiniteDomainOverlay {
     }
 
     private static float getProgressFactor(DomainVisualState state) {
+        if (state.fadingOut) {
+            return Mth.clamp(state.fadeTicksRemaining / (float) DOMAIN_VISUAL_FADE_TICKS, 0.0F, 1.0F);
+        }
+
         int elapsedTicks = DOMAIN_DURATION_TICKS - Math.max(0, state.remainingTicks);
         return Mth.clamp(elapsedTicks / (float) DOMAIN_BUILDUP_TICKS, 0.0F, 1.0F);
     }
@@ -157,6 +171,8 @@ public final class InfiniteDomainOverlay {
         private int remainingTicks;
         private float smoothedFactor;
         private float smoothedProgress;
+        private boolean fadingOut;
+        private int fadeTicksRemaining;
 
         private DomainVisualState(double centerX, double centerY, double centerZ, float radius, int remainingTicks) {
             this.centerX = centerX;
@@ -166,6 +182,13 @@ public final class InfiniteDomainOverlay {
             this.remainingTicks = remainingTicks;
             this.smoothedFactor = 0.0F;
             this.smoothedProgress = 0.0F;
+            this.fadingOut = false;
+            this.fadeTicksRemaining = DOMAIN_VISUAL_FADE_TICKS;
+        }
+
+        private void startFadeOut() {
+            this.fadingOut = true;
+            this.fadeTicksRemaining = DOMAIN_VISUAL_FADE_TICKS;
         }
     }
 }

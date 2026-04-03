@@ -22,8 +22,11 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.Relative;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -32,12 +35,15 @@ public final class InfiniteDomainTechniqueHandler {
     private static final int DOMAIN_ENERGY_COST = 600;
     private static final int DOMAIN_DURATION_TICKS = 20 * 12;
     private static final int DOMAIN_BUILDUP_TICKS = 50;
+    private static final int DOMAIN_COLLAPSE_TICKS = 24;
     private static final int DOMAIN_COOLDOWN_TICKS = 20 * 60;
     private static final double DOMAIN_RADIUS = 20.0;
     private static final double DOMAIN_RADIUS_SQR = DOMAIN_RADIUS * DOMAIN_RADIUS;
     private static final int DOMAIN_RADIUS_BLOCKS = 20;
     private static final int DOMAIN_FLOOR_OFFSET = -1;
     private static final int DOMAIN_CEILING_OFFSET = 12;
+    private static final int DOMAIN_INITIAL_CLEAR_LAYERS = 3;
+    private static final int DOMAIN_RELOCATION_DEPTH = 4;
     private static final float DOMAIN_DAMAGE_BONUS_MULTIPLIER = 0.5F;
     private static final BlockState DOMAIN_SHELL_BLOCK = Blocks.BLACK_CONCRETE.defaultBlockState();
 
@@ -124,23 +130,40 @@ public final class InfiniteDomainTechniqueHandler {
             applyDomainParalysis(domain, paralyzedThisTick);
             spawnAmbientParticles(domain);
 
-            // Screen shake sutil para todos los jugadores dentro del dominio cada 2 ticks
-            if (domain.ageTicks % 2 == 0) {
+            float buildProgress = getBuildProgress(domain);
+            float collapseProgress = getCollapseProgress(domain);
+
+            if (buildProgress > 0.15F && domain.ageTicks % 3 == 0) {
                 for (ServerPlayer p : domain.level.getPlayers(pl -> isInsideDomain(pl, domain))) {
-                    ServerPlayNetworking.send(p, new ScreenShakePayload(0.3F, 3));
+                    float insideFactor = getInsideFactor(p, domain);
+                    float intensity = (0.06F + (0.16F * buildProgress) + (0.08F * collapseProgress)) * insideFactor;
+                    if (intensity > 0.02F) {
+                        ServerPlayNetworking.send(p, new ScreenShakePayload(intensity, collapseProgress > 0.0F ? 4 : 3));
+                    }
                 }
             }
 
-            if (domain.remainingTicks % 40 == 0) {
-                domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, 0.7F, 0.7F);
+            if (buildProgress > 0.35F && domain.ageTicks % 50 == 0) {
+                float volume = 0.35F + (0.25F * buildProgress);
+                float pitch = 0.55F + (0.08F * domain.level.random.nextFloat());
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, volume, pitch);
             }
 
-            if (domain.remainingTicks % 60 == 0) {
-                domain.level.playSound(null, owner.blockPosition(), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, 0.15F, 1.2F);
+            if (buildProgress > 0.55F && domain.ageTicks % 72 == 0) {
+                float volume = 0.10F + (0.10F * collapseProgress);
+                float pitch = 0.95F + (0.20F * domain.level.random.nextFloat());
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, volume, pitch);
+            }
+
+            if (domain.remainingTicks == DOMAIN_COLLAPSE_TICKS) {
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(), SoundSource.PLAYERS, 0.55F, 0.7F);
             }
 
             if (domain.remainingTicks <= 0) {
                 owner.displayClientMessage(Component.translatable("message.jjk.infinite_domain_end"), true);
+                spawnCollapseParticles(domain);
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.PLAYERS, 1.0F, 0.65F);
+                domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.8F, 0.6F);
                 restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
                 iterator.remove();
@@ -216,6 +239,16 @@ public final class InfiniteDomainTechniqueHandler {
         }
     }
 
+    public static boolean isProtectedDomainBlock(ServerLevel level, BlockPos pos) {
+        BlockPos immutablePos = pos.immutable();
+        for (ActiveDomain domain : ACTIVE_DOMAINS.values()) {
+            if (domain.level == level && domain.originalBlocks.containsKey(immutablePos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isTechniqueAvailableForPlayer(ServerPlayer player) {
         return JJKRoster.techniquesForCharacter(CharacterSelectionHandler.getSelectedCharacter(player)).stream()
             .anyMatch(definition -> definition.id().equals("infinite_domain"));
@@ -232,6 +265,7 @@ public final class InfiniteDomainTechniqueHandler {
             UUID mobId = mob.getUUID();
             paralyzedThisTick.add(mobId);
             PARALYZED_MOBS.computeIfAbsent(mobId, id -> new ParalyzedMobState(mob, mob.isNoAi()));
+            snapMobToDomainFloorIfNeeded(domain, mob);
 
             mob.setNoAi(true);
             mob.setAggressive(false);
@@ -274,6 +308,22 @@ public final class InfiniteDomainTechniqueHandler {
         state.mob.setDeltaMovement(Vec3.ZERO);
     }
 
+    private static void snapMobToDomainFloorIfNeeded(ActiveDomain domain, Mob mob) {
+        double floorTargetY = domain.floorY + 1.0D;
+        if (Math.abs(mob.getY() - floorTargetY) <= 0.1D) {
+            return;
+        }
+
+        Vec3 safeFloorPosition = findSafeFloorPosition(domain, mob, mob.getX(), mob.getZ());
+        if (safeFloorPosition == null) {
+            safeFloorPosition = findSafeDomainPosition(domain, mob);
+        }
+
+        if (safeFloorPosition != null) {
+            teleportInsideDomain(mob, domain, safeFloorPosition);
+        }
+    }
+
     private static boolean isInsideDomain(LivingEntity entity, ActiveDomain domain) {
         Vec3 entityCenter = getEntityCenter(entity);
         if (entityCenter.y < domain.floorY || entityCenter.y > domain.ceilingY + 1.0D) {
@@ -285,12 +335,60 @@ public final class InfiniteDomainTechniqueHandler {
         return (dx * dx) + (dz * dz) <= DOMAIN_RADIUS_SQR;
     }
 
+    private static boolean isWithinDomainHorizontal(double x, double z, ActiveDomain domain) {
+        double dx = x - domain.center.x;
+        double dz = z - domain.center.z;
+        return (dx * dx) + (dz * dz) <= DOMAIN_RADIUS_SQR;
+    }
+
+    private static float getInsideFactor(LivingEntity entity, ActiveDomain domain) {
+        Vec3 entityCenter = getEntityCenter(entity);
+        if (entityCenter.y < domain.floorY || entityCenter.y > domain.ceilingY + 1.0D) {
+            return 0.0F;
+        }
+
+        double dx = entityCenter.x - domain.center.x;
+        double dz = entityCenter.z - domain.center.z;
+        double distance = Math.sqrt((dx * dx) + (dz * dz));
+        if (distance >= DOMAIN_RADIUS) {
+            return 0.0F;
+        }
+
+        return Mth.clamp((float) (1.0D - (distance / DOMAIN_RADIUS)), 0.0F, 1.0F);
+    }
+
     private static Vec3 getEntityCenter(LivingEntity entity) {
         return entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
     }
 
     private static void initializeDomainShell(ActiveDomain domain) {
         buildFloorAndCeiling(domain);
+        advanceInteriorVoid(domain, DOMAIN_INITIAL_CLEAR_LAYERS);
+        relocateEntitiesIntoDomain(domain);
+    }
+
+    private static void advanceInteriorVoid(ActiveDomain domain, int targetLayers) {
+        int fullInteriorHeight = Math.max(0, domain.ceilingY - domain.floorY - 1);
+        int boundedTarget = Math.min(fullInteriorHeight, Math.max(targetLayers, 0));
+        while (domain.clearedInteriorLayers < boundedTarget) {
+            domain.clearedInteriorLayers++;
+            clearInteriorLayer(domain, domain.floorY + domain.clearedInteriorLayers);
+        }
+    }
+
+    private static void clearInteriorLayer(ActiveDomain domain, int y) {
+        int clearRadius = DOMAIN_RADIUS_BLOCKS - 1;
+        int clearRadiusSq = clearRadius * clearRadius;
+
+        for (int x = -clearRadius; x <= clearRadius; x++) {
+            for (int z = -clearRadius; z <= clearRadius; z++) {
+                if ((x * x) + (z * z) >= clearRadiusSq) {
+                    continue;
+                }
+
+                clearDomainBlock(domain, new BlockPos(domain.centerBlockX + x, y, domain.centerBlockZ + z));
+            }
+        }
     }
 
     private static void buildFloorAndCeiling(ActiveDomain domain) {
@@ -325,6 +423,8 @@ public final class InfiniteDomainTechniqueHandler {
             buildWallLayer(domain, layerY);
             playWallLayerSound(domain, layerY);
         }
+
+        advanceInteriorVoid(domain, Math.max(targetWallLayers, DOMAIN_INITIAL_CLEAR_LAYERS));
     }
 
     private static void buildWallLayer(ActiveDomain domain, int y) {
@@ -371,6 +471,31 @@ public final class InfiniteDomainTechniqueHandler {
         return true;
     }
 
+    private static boolean clearDomainBlock(ActiveDomain domain, BlockPos pos) {
+        BlockPos immutablePos = pos.immutable();
+        if (domain.originalBlocks.containsKey(immutablePos)) {
+            return false;
+        }
+
+        BlockState currentState = domain.level.getBlockState(immutablePos);
+        if (currentState.isAir()) {
+            return false;
+        }
+
+        if (domain.level.getBlockEntity(immutablePos) != null) {
+            return false;
+        }
+
+        float hardness = currentState.getDestroySpeed(domain.level, immutablePos);
+        if (hardness < 0.0F) {
+            return false;
+        }
+
+        domain.originalBlocks.put(immutablePos, currentState);
+        domain.level.setBlock(immutablePos, Blocks.AIR.defaultBlockState(), 3);
+        return true;
+    }
+
     private static void spawnWallLayerParticles(ActiveDomain domain, int y) {
         int particleCount = 56;
         double particleRadius = DOMAIN_RADIUS_BLOCKS - 0.2D;
@@ -397,6 +522,251 @@ public final class InfiniteDomainTechniqueHandler {
             domain.level.setBlock(entry.getKey(), entry.getValue(), 3);
         }
         domain.originalBlocks.clear();
+        relocateEntitiesAfterRestore(domain);
+    }
+
+    private static void relocateEntitiesIntoDomain(ActiveDomain domain) {
+        AABB area = new AABB(
+            domain.center.x - DOMAIN_RADIUS,
+            domain.floorY - DOMAIN_RELOCATION_DEPTH,
+            domain.center.z - DOMAIN_RADIUS,
+            domain.center.x + DOMAIN_RADIUS,
+            domain.ceilingY + 2.0D,
+            domain.center.z + DOMAIN_RADIUS
+        );
+
+        for (LivingEntity entity : domain.level.getEntitiesOfClass(LivingEntity.class, area, LivingEntity::isAlive)) {
+            if (entity instanceof Player player && player.isSpectator()) {
+                continue;
+            }
+
+            boolean forceFloorSnap = entity instanceof Mob && isWithinDomainHorizontal(entity.getX(), entity.getZ(), domain);
+            if (!forceFloorSnap && !shouldRelocateIntoDomain(entity, domain)) {
+                continue;
+            }
+
+            Vec3 safePosition = forceFloorSnap
+                ? findSafeFloorPosition(domain, entity, entity.getX(), entity.getZ())
+                : findSafeDomainPosition(domain, entity);
+            if (safePosition == null && forceFloorSnap) {
+                safePosition = findSafeDomainPosition(domain, entity);
+            }
+            if (safePosition == null) {
+                continue;
+            }
+
+            teleportInsideDomain(entity, domain, safePosition);
+        }
+    }
+
+    private static boolean shouldRelocateIntoDomain(LivingEntity entity, ActiveDomain domain) {
+        double dx = entity.getX() - domain.center.x;
+        double dz = entity.getZ() - domain.center.z;
+        if ((dx * dx) + (dz * dz) > DOMAIN_RADIUS_SQR) {
+            return false;
+        }
+
+        AABB box = entity.getBoundingBox();
+        if (box.maxY < domain.floorY - DOMAIN_RELOCATION_DEPTH || box.minY > domain.ceilingY) {
+            return false;
+        }
+
+        double safeMinY = domain.floorY + 1.0D;
+        double safeMaxY = domain.ceilingY - Math.max(1.25D, entity.getBbHeight());
+        return entity.isInWall() || entity.getY() < safeMinY || entity.getY() > safeMaxY || !domain.level.noCollision(entity, box);
+    }
+
+    private static Vec3 findSafeDomainPosition(ActiveDomain domain, LivingEntity entity) {
+        double preferredX = Mth.clamp(entity.getX(), domain.center.x - (DOMAIN_RADIUS - 2.5D), domain.center.x + (DOMAIN_RADIUS - 2.5D));
+        double preferredZ = Mth.clamp(entity.getZ(), domain.center.z - (DOMAIN_RADIUS - 2.5D), domain.center.z + (DOMAIN_RADIUS - 2.5D));
+
+        Vec3 directCandidate = tryFindSafeColumn(domain, entity, preferredX, preferredZ, false);
+        if (directCandidate != null) {
+            return directCandidate;
+        }
+
+        int angleSteps = 20;
+        for (double radius = 0.0D; radius <= DOMAIN_RADIUS - 2.0D; radius += 2.0D) {
+            for (int i = 0; i < angleSteps; i++) {
+                double angle = (Math.PI * 2.0D * i) / angleSteps;
+                double x = domain.center.x + Math.cos(angle) * radius;
+                double z = domain.center.z + Math.sin(angle) * radius;
+                Vec3 candidate = tryFindSafeColumn(domain, entity, x, z, false);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static Vec3 findSafeFloorPosition(ActiveDomain domain, LivingEntity entity, double preferredX, double preferredZ) {
+        Vec3 directCandidate = tryFindSafeColumn(domain, entity, preferredX, preferredZ, true);
+        if (directCandidate != null) {
+            return directCandidate;
+        }
+
+        int angleSteps = 16;
+        for (double radius = 0.0D; radius <= 4.0D; radius += 1.5D) {
+            for (int i = 0; i < angleSteps; i++) {
+                double angle = (Math.PI * 2.0D * i) / angleSteps;
+                double x = preferredX + Math.cos(angle) * radius;
+                double z = preferredZ + Math.sin(angle) * radius;
+                Vec3 candidate = tryFindSafeColumn(domain, entity, x, z, true);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static Vec3 tryFindSafeColumn(ActiveDomain domain, LivingEntity entity, double x, double z, boolean floorOnly) {
+        double maxEntityBaseY = domain.ceilingY - Math.max(1.25D, entity.getBbHeight());
+        double startY = domain.floorY + 1.0D;
+        double endY = floorOnly ? startY : maxEntityBaseY;
+        for (double y = startY; y <= endY; y += 1.0D) {
+            boolean safe = floorOnly
+                ? isSafeGroundedSpot(domain, entity, x, y, z)
+                : isSafeDomainSpot(domain, entity, x, y, z);
+            if (safe) {
+                return new Vec3(x, y, z);
+            }
+        }
+
+        return null;
+    }
+
+    private static void relocateEntitiesAfterRestore(ActiveDomain domain) {
+        AABB area = new AABB(
+            domain.center.x - DOMAIN_RADIUS,
+            domain.floorY - 2.0D,
+            domain.center.z - DOMAIN_RADIUS,
+            domain.center.x + DOMAIN_RADIUS,
+            domain.ceilingY + 10.0D,
+            domain.center.z + DOMAIN_RADIUS
+        );
+
+        for (LivingEntity entity : domain.level.getEntitiesOfClass(LivingEntity.class, area, LivingEntity::isAlive)) {
+            if (entity instanceof Player player && player.isSpectator()) {
+                continue;
+            }
+
+            if (domain.level.noCollision(entity, entity.getBoundingBox()) && !entity.isInWall() && !needsGroundRecovery(domain, entity)) {
+                continue;
+            }
+
+            Vec3 safePosition = findSafePostRestorePosition(domain, entity);
+            if (safePosition != null) {
+                teleportInsideDomain(entity, domain, safePosition);
+            }
+        }
+    }
+
+    private static Vec3 findSafePostRestorePosition(ActiveDomain domain, LivingEntity entity) {
+        Vec3 directCandidate = tryFindGroundedColumn(domain, entity, entity.getX(), entity.getZ(), true);
+        if (directCandidate != null) {
+            return directCandidate;
+        }
+
+        int angleSteps = 20;
+        for (double radius = 0.0D; radius <= 6.0D; radius += 1.5D) {
+            for (int i = 0; i < angleSteps; i++) {
+                double angle = (Math.PI * 2.0D * i) / angleSteps;
+                double x = entity.getX() + Math.cos(angle) * radius;
+                double z = entity.getZ() + Math.sin(angle) * radius;
+                Vec3 candidate = tryFindGroundedColumn(domain, entity, x, z, true);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+        }
+
+        return findSafeFloorPosition(domain, entity, entity.getX(), entity.getZ());
+    }
+
+    private static Vec3 tryFindGroundedColumn(ActiveDomain domain, LivingEntity entity, double x, double z, boolean highestFirst) {
+        double dx = x - domain.center.x;
+        double dz = z - domain.center.z;
+        double maxRadius = DOMAIN_RADIUS - 1.5D;
+        if ((dx * dx) + (dz * dz) > maxRadius * maxRadius) {
+            return null;
+        }
+
+        double minY = domain.floorY + 1.0D;
+        double maxY = domain.ceilingY + 8.0D;
+
+        if (highestFirst) {
+            for (double y = maxY; y >= minY; y -= 1.0D) {
+                if (isSafeGroundedSpot(domain, entity, x, y, z)) {
+                    return new Vec3(x, y, z);
+                }
+            }
+        } else {
+            for (double y = minY; y <= maxY; y += 1.0D) {
+                if (isSafeGroundedSpot(domain, entity, x, y, z)) {
+                    return new Vec3(x, y, z);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean isSafeDomainSpot(ActiveDomain domain, LivingEntity entity, double x, double y, double z) {
+        double dx = x - domain.center.x;
+        double dz = z - domain.center.z;
+        double maxRadius = DOMAIN_RADIUS - 1.5D;
+        if ((dx * dx) + (dz * dz) > maxRadius * maxRadius) {
+            return false;
+        }
+
+        AABB movedBox = entity.getBoundingBox().move(x - entity.getX(), y - entity.getY(), z - entity.getZ());
+        return domain.level.noCollision(entity, movedBox);
+    }
+
+    private static boolean isSafeGroundedSpot(ActiveDomain domain, LivingEntity entity, double x, double y, double z) {
+        if (!isSafeDomainSpot(domain, entity, x, y, z)) {
+            return false;
+        }
+
+        BlockPos supportPos = BlockPos.containing(x, y - 0.1D, z).below();
+        BlockState supportState = domain.level.getBlockState(supportPos);
+        if (supportState.isAir()) {
+            return false;
+        }
+
+        return supportState.blocksMotion() || supportState.isFaceSturdy(domain.level, supportPos, net.minecraft.core.Direction.UP);
+    }
+
+    private static boolean needsGroundRecovery(ActiveDomain domain, LivingEntity entity) {
+        if (!isWithinDomainHorizontal(entity.getX(), entity.getZ(), domain)) {
+            return false;
+        }
+
+        BlockPos supportPos = BlockPos.containing(entity.getX(), entity.getY() - 0.1D, entity.getZ()).below();
+        BlockState supportState = domain.level.getBlockState(supportPos);
+        if (supportState.isAir()) {
+            return true;
+        }
+
+        return !supportState.blocksMotion() && !supportState.isFaceSturdy(domain.level, supportPos, net.minecraft.core.Direction.UP);
+    }
+
+    private static void teleportInsideDomain(LivingEntity entity, ActiveDomain domain, Vec3 safePosition) {
+        entity.setDeltaMovement(Vec3.ZERO);
+        entity.fallDistance = -8.0F;
+
+        if (entity instanceof ServerPlayer player) {
+            player.teleportTo(domain.level, safePosition.x, safePosition.y, safePosition.z, Set.of(), player.getYRot(), player.getXRot(), false);
+        } else {
+            entity.teleportTo(safePosition.x, safePosition.y, safePosition.z);
+        }
+
+        entity.invulnerableTime = Math.max(entity.invulnerableTime, 10);
+        entity.hurtMarked = true;
     }
 
     private static void enforceDomainBoundary(ActiveDomain domain) {
@@ -499,12 +869,16 @@ public final class InfiniteDomainTechniqueHandler {
         domain.level.sendParticles(ParticleTypes.SQUID_INK, domain.center.x, domain.center.y + 1.5D, domain.center.z, 36, 1.8D, 2.5D, 1.8D, 0.02D);
         domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 3.5D, domain.center.z, 48, DOMAIN_RADIUS * 0.45D, 2.0D, DOMAIN_RADIUS * 0.45D, 0.005D);
         domain.level.sendParticles(ParticleTypes.SMOKE, domain.center.x, domain.center.y + 0.8D, domain.center.z, 24, 1.0D, 1.0D, 1.0D, 0.01D);
+        domain.level.sendParticles(ParticleTypes.REVERSE_PORTAL, domain.center.x, domain.center.y + 2.0D, domain.center.z, 20, 0.8D, 1.2D, 0.8D, 0.02D);
     }
 
     private static void spawnAmbientParticles(ActiveDomain domain) {
+        float buildProgress = getBuildProgress(domain);
+        float collapseProgress = getCollapseProgress(domain);
+        float intensity = Mth.clamp((buildProgress * 0.85F) + (collapseProgress * 0.35F), 0.15F, 1.15F);
         // Volumen interior: END_ROD dispersas (energía suspendida) cada 2 ticks
         if (domain.ageTicks % 2 == 0) {
-            int count = 18;
+            int count = Mth.ceil(8.0F + (14.0F * intensity));
             double height = Math.max(0.0D, domain.ceilingY - domain.floorY);
             for (int i = 0; i < count; i++) {
                 double r = DOMAIN_RADIUS * Math.sqrt(domain.level.random.nextDouble());
@@ -518,7 +892,7 @@ public final class InfiniteDomainTechniqueHandler {
 
         // Columnas ascendentes desde el suelo hacia el centro cada 3 ticks
         if (domain.ageTicks % 3 == 0) {
-            int columns = 6;
+            int columns = 3 + Mth.ceil(4.0F * intensity);
             for (int i = 0; i < columns; i++) {
                 double r = DOMAIN_RADIUS * (0.3D + 0.6D * domain.level.random.nextDouble());
                 double a = (Math.PI * 2.0D * i) / columns + domain.ageTicks * 0.07D;
@@ -536,16 +910,57 @@ public final class InfiniteDomainTechniqueHandler {
 
         // Anillo perimetral y bruma interior suave cada 4 ticks (efecto existente)
         if (domain.ageTicks % 4 == 0) {
-            for (int i = 0; i < 16; i++) {
-                double angle = (Math.PI * 2.0D * i) / 16.0D + domain.remainingTicks * 0.035D;
+            int perimeterCount = 10 + Mth.ceil(10.0F * intensity);
+            for (int i = 0; i < perimeterCount; i++) {
+                double angle = (Math.PI * 2.0D * i) / perimeterCount + domain.remainingTicks * 0.035D;
                 double x = domain.center.x + Math.cos(angle) * DOMAIN_RADIUS;
                 double z = domain.center.z + Math.sin(angle) * DOMAIN_RADIUS;
                 domain.level.sendParticles(ParticleTypes.SQUID_INK, x, domain.center.y + 0.25D, z, 2, 0.18D, 0.9D, 0.18D, 0.01D);
             }
 
-            domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 2.5D, domain.center.z, 12, DOMAIN_RADIUS * 0.55D, 1.6D, DOMAIN_RADIUS * 0.55D, 0.002D);
-            domain.level.sendParticles(ParticleTypes.SMOKE, domain.center.x, domain.center.y + 1.1D, domain.center.z, 4, 0.8D, 0.4D, 0.8D, 0.003D);
+            domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 2.5D, domain.center.z, Mth.ceil(6.0F + (10.0F * intensity)), DOMAIN_RADIUS * 0.55D, 1.6D, DOMAIN_RADIUS * 0.55D, 0.002D);
+            domain.level.sendParticles(ParticleTypes.SMOKE, domain.center.x, domain.center.y + 1.1D, domain.center.z, Mth.ceil(3.0F + (5.0F * intensity)), 0.8D, 0.4D, 0.8D, 0.003D);
         }
+
+        if (buildProgress > 0.35F && domain.ageTicks % 2 == 1) {
+            double spiralAngle = domain.ageTicks * 0.16D;
+            double vortexRadius = 1.8D + (1.6D * (1.0D - collapseProgress));
+            for (int i = 0; i < 4; i++) {
+                double angle = spiralAngle + (Math.PI * 0.5D * i);
+                double x = domain.center.x + Math.cos(angle) * vortexRadius;
+                double z = domain.center.z + Math.sin(angle) * vortexRadius;
+                double y = domain.center.y + 1.2D + (0.35D * i);
+                domain.level.sendParticles(ParticleTypes.SQUID_INK, x, y, z, 1, 0.05D, 0.08D, 0.05D, 0.0D);
+                domain.level.sendParticles(ParticleTypes.SMOKE, x, y, z, 1, 0.03D, 0.04D, 0.03D, 0.0D);
+            }
+        }
+    }
+
+    private static void spawnCollapseParticles(ActiveDomain domain) {
+        int ringCount = 24;
+        for (int i = 0; i < ringCount; i++) {
+            double angle = (Math.PI * 2.0D * i) / ringCount;
+            double x = domain.center.x + Math.cos(angle) * DOMAIN_RADIUS;
+            double z = domain.center.z + Math.sin(angle) * DOMAIN_RADIUS;
+            domain.level.sendParticles(ParticleTypes.SQUID_INK, x, domain.center.y + 0.8D, z, 6, 0.18D, 1.1D, 0.18D, 0.02D);
+            domain.level.sendParticles(ParticleTypes.SMOKE, x, domain.center.y + 0.5D, z, 4, 0.14D, 0.6D, 0.14D, 0.01D);
+        }
+
+        domain.level.sendParticles(ParticleTypes.REVERSE_PORTAL, domain.center.x, domain.center.y + 2.5D, domain.center.z, 40, 2.2D, 2.6D, 2.2D, 0.06D);
+        domain.level.sendParticles(ParticleTypes.ASH, domain.center.x, domain.center.y + 2.0D, domain.center.z, 54, DOMAIN_RADIUS * 0.4D, 2.0D, DOMAIN_RADIUS * 0.4D, 0.01D);
+        domain.level.sendParticles(ParticleTypes.SQUID_INK, domain.center.x, domain.center.y + 1.8D, domain.center.z, 30, 1.4D, 1.8D, 1.4D, 0.015D);
+    }
+
+    private static float getBuildProgress(ActiveDomain domain) {
+        return Mth.clamp(domain.ageTicks / (float) DOMAIN_BUILDUP_TICKS, 0.0F, 1.0F);
+    }
+
+    private static float getCollapseProgress(ActiveDomain domain) {
+        if (domain.remainingTicks >= DOMAIN_COLLAPSE_TICKS) {
+            return 0.0F;
+        }
+
+        return Mth.clamp((DOMAIN_COLLAPSE_TICKS - Math.max(domain.remainingTicks, 0)) / (float) DOMAIN_COLLAPSE_TICKS, 0.0F, 1.0F);
     }
 
     private static String formatSeconds(int ticks) {
@@ -565,6 +980,7 @@ public final class InfiniteDomainTechniqueHandler {
         private int remainingTicks;
         private int ageTicks;
         private int builtWallLayers;
+        private int clearedInteriorLayers;
 
         private ActiveDomain(UUID ownerId, int ownerEntityId, ServerLevel level, Vec3 center, BlockPos activationPos, int remainingTicks) {
             this.ownerId = ownerId;
@@ -579,6 +995,7 @@ public final class InfiniteDomainTechniqueHandler {
             this.remainingTicks = remainingTicks;
             this.ageTicks = 0;
             this.builtWallLayers = 0;
+            this.clearedInteriorLayers = 0;
         }
     }
 

@@ -268,6 +268,7 @@ public final class BlueTechniqueHandler {
 
             BlockState state = ab.level.getBlockState(pos);
             if (state.isAir()) continue;
+            if (InfiniteDomainTechniqueHandler.isProtectedDomainBlock(ab.level, pos)) continue;
             if (ab.level.getBlockEntity(pos) != null) continue;
             float hardness = state.getDestroySpeed(ab.level, pos);
             if (hardness < 0) continue;
@@ -321,6 +322,7 @@ public final class BlueTechniqueHandler {
 
             BlockState state = ab.level.getBlockState(pos);
             if (state.isAir() || !state.getFluidState().isEmpty()) continue;
+            if (InfiniteDomainTechniqueHandler.isProtectedDomainBlock(ab.level, pos)) continue;
             if (ab.level.getBlockEntity(pos) != null) continue;
             float hardness = state.getDestroySpeed(ab.level, pos);
             if (hardness < 0 || hardness > BlueConfig.SOFT_BLOCK_DESTROY_SPEED) continue;
@@ -336,6 +338,7 @@ public final class BlueTechniqueHandler {
 
             BlockState state = ab.level.getBlockState(pos);
             if (state.isAir()) continue;
+            if (InfiniteDomainTechniqueHandler.isProtectedDomainBlock(ab.level, pos)) continue;
 
             // Sonido de arranque
             ab.level.playSound(null, pos, state.getSoundType().getBreakSound(), SoundSource.BLOCKS,

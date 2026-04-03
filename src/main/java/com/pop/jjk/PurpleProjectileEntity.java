@@ -304,6 +304,10 @@ public class PurpleProjectileEntity extends Projectile {
             return false;
         }
 
+        if (InfiniteDomainTechniqueHandler.isProtectedDomainBlock(level, pos)) {
+            return false;
+        }
+
         if (!state.getFluidState().isEmpty()) {
             return false;
         }

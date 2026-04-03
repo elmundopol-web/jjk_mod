@@ -18,6 +18,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 public class JJKClientMod implements ClientModInitializer {
@@ -111,11 +112,29 @@ public class JJKClientMod implements ClientModInitializer {
         double dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
         double len = Math.sqrt(dx*dx + dy*dy + dz*dz);
         if (len < 0.01) return;
-        int steps = Math.max(1, (int) (len / 0.42));
+        Vec3 camPos = (client.player != null) ? client.player.position() : null;
+        double mx = (x1 + x2) * 0.5;
+        double my = (y1 + y2) * 0.5;
+        double mz = (z1 + z2) * 0.5;
+        double dist2 = camPos != null ? camPos.distanceToSqr(mx, my, mz) : 0.0;
+
+        double stepLen = 0.80;
+        int beamMod = 3, trailMod = 6, sideMod = 7;
+        if (dist2 > 1600.0) { // >40 bloques
+            stepLen = 1.20; beamMod = 4; trailMod = 8; sideMod = 10;
+        }
+        if (dist2 > 3600.0) { // >60 bloques
+            stepLen = 1.80; beamMod = 5; trailMod = 10; sideMod = 14;
+        }
+
+        int steps = Math.max(1, (int) (len / stepLen));
+        int budget = 32;
+        if (dist2 > 1600.0) budget = 20;
+        if (dist2 > 3600.0) budget = 12;
         double sx = dx / steps, sy = dy / steps, sz = dz / steps;
         // Dirección normalizada y eje lateral para "fuego por los lados" (menos denso)
-        double vx = dx / len, vy = dy / len, vz = dz / len;
-        double rx = -vz, ry = 0.0, rz = vx;
+        double vx = dx / len, vz = dz / len;
+        double rx = -vz, rz = vx;
         double rlen = Math.sqrt(rx*rx + rz*rz);
         if (rlen < 1.0E-3) { rx = 1.0; rz = 0.0; rlen = 1.0; }
         rx /= rlen; rz /= rlen;
@@ -123,21 +142,25 @@ public class JJKClientMod implements ClientModInitializer {
             double px = x1 + sx * i;
             double py = y1 + sy * i;
             double pz = z1 + sz * i;
-            // Cuerpo del rayo (intercalado para bajar densidad)
-            if ((i & 1) == 0) {
+            // Cuerpo del rayo (más espaciado)
+            if ((i % beamMod) == 0) {
                 level.addParticle(JJKParticles.FIRE_BEAM, px, py, pz, 0.0, 0.0, 0.0);
-            } else if ((i % 4) == 0) {
+                if (--budget <= 0) break;
+            } else if ((i % trailMod) == 0) {
                 level.addParticle(JJKParticles.FIRE_TRAIL, px, py, pz, 0.0, 0.0, 0.0);
+                if (--budget <= 0) break;
             }
-            // Llamas laterales esporádicas
-            if ((i % 5) == 0) {
-                double off = 0.42 + (client.level.random.nextDouble() * 0.32);
+            // Llamas laterales aún más esporádicas
+            if ((i % sideMod) == 0) {
+                double off = 0.42 + (client.level.random.nextDouble() * 0.30);
                 double lx = px + rx * off;
                 double lz = pz + rz * off;
                 double rx2 = px - rx * off;
                 double rz2 = pz - rz * off;
-                level.addParticle(JJKParticles.FIRE_TRAIL, lx, py, lz, 0.0, 0.015, 0.0);
-                level.addParticle(JJKParticles.FIRE_TRAIL, rx2, py, rz2, 0.0, 0.015, 0.0);
+                level.addParticle(JJKParticles.FIRE_TRAIL, lx, py, lz, 0.0, 0.012, 0.0);
+                level.addParticle(JJKParticles.FIRE_TRAIL, rx2, py, rz2, 0.0, 0.012, 0.0);
+                budget -= 2;
+                if (budget <= 0) break;
             }
         }
     }
@@ -150,7 +173,7 @@ public class JJKClientMod implements ClientModInitializer {
         boolean allowByHotbar = shouldCaptureAbilityInput(client)
             && (isFugaActive || (entry != null && "fuga".equals(entry.id())));
 
-        boolean inputDown = client.options.keyUse.isDown();
+        boolean inputDown = client.options.keyAttack.isDown();
         boolean useDown = canInteract && allowByHotbar && inputDown;
 
         if (useDown && !fugaUseHeld) {
@@ -159,7 +182,6 @@ public class JJKClientMod implements ClientModInitializer {
             tecnicaActivaId = "fuga";
             tecnicaActivaNombre = getTechniqueNameComponent("fuga");
             enviarEstadoTecnicas();
-            ClientPlayNetworking.send(FugaUsePayload.INSTANCE);
             ClientPlayNetworking.send(new FugaHoldPayload(true));
         }
         // transición a false en release
@@ -177,7 +199,7 @@ public class JJKClientMod implements ClientModInitializer {
             && entry != null
             && "supernova".equals(entry.id());
 
-        boolean inputDown = client.options.keyUse.isDown();
+        boolean inputDown = client.options.keyAttack.isDown();
         boolean useDown = canInteract && allowByHotbar && inputDown;
 
         if (useDown && !supernovaUseHeld) {
@@ -295,7 +317,6 @@ public class JJKClientMod implements ClientModInitializer {
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
         HudRenderCallback.EVENT.register(CursedEnergyOverlay::render);
-        HudRenderCallback.EVENT.register(JJKClientMod::renderFugaSkyTint);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ScreenShakeManager.tick();
@@ -332,21 +353,11 @@ public class JJKClientMod implements ClientModInitializer {
         });
     }
 
-    private static void renderFugaSkyTint(net.minecraft.client.gui.GuiGraphics graphics, net.minecraft.client.DeltaTracker delta) {
-        if (fugaSkyTintTicks <= 0) return;
-        int w = graphics.guiWidth();
-        int h = graphics.guiHeight();
-        float f = Math.min(1.0F, fugaSkyTintTicks / 120.0F);
-        int alphaTop = (int)(f * 95);   // más suave que antes
-        int alphaMid = (int)(f * 45);
-        int colorTop = ((alphaTop & 0xFF) << 24) | 0x00CC3A0A; // rojizo-anaranjado
-        int colorMid = ((alphaMid & 0xFF) << 24) | 0x00CC3A0A;
-        int skyH = (int)(h * 0.55);
-        int midH = (int)(h * 0.18);
-        // Cielo (parte superior)
-        graphics.fill(0, 0, w, skyH, colorTop);
-        // Transición cerca del horizonte
-        graphics.fill(0, skyH, w, Math.min(h, skyH + midH), colorMid);
+    private static void renderFugaSkyTint(net.minecraft.client.gui.GuiGraphics graphics, net.minecraft.client.DeltaTracker delta) { /* no-op: el tinte ahora se aplica al cielo real */ }
+
+    public static float getFugaSkyTintFactor() {
+        if (fugaSkyTintTicks <= 0) return 0.0F;
+        return Math.min(1.0F, fugaSkyTintTicks / 120.0F);
     }
 
     public static void confirmCharacterSelection(String newCharacterId, Minecraft client) {
@@ -564,6 +575,16 @@ public class JJKClientMod implements ClientModInitializer {
             return true;
         }
 
+        if ("supernova".equals(entry.id())) {
+            // Se maneja por input sostenido en handleSupernovaHoldInput
+            return true;
+        }
+
+        if ("fuga".equals(entry.id())) {
+            // Se maneja por input sostenido en handleFugaHoldInput
+            return true;
+        }
+
         activarTecnicaDesdeHotbar(entry.id(), client);
         return true;
     }
@@ -611,7 +632,10 @@ public class JJKClientMod implements ClientModInitializer {
     }
 
     private static boolean shouldCaptureAbilityInput(Minecraft client) {
-        return client.player != null && client.screen == null && hasSelectedCharacter();
+        return client.player != null
+            && client.screen == null
+            && abilityHotbarVisible
+            && hasSelectedCharacter();
     }
 
     private static void handleBlueHoldInput(Minecraft client) {
@@ -620,7 +644,7 @@ public class JJKClientMod implements ClientModInitializer {
             && selectedEntry != null
             && "blue".equals(selectedEntry.id());
 
-        boolean useDown = isBlueSelected && client.options.keyUse.isDown();
+        boolean useDown = isBlueSelected && client.options.keyAttack.isDown();
 
         // Detectar flanco de subida (press event) — enviar un solo paquete por clic
         if (useDown && !blueUseHeld) {
@@ -637,7 +661,7 @@ public class JJKClientMod implements ClientModInitializer {
         boolean allowByHotbar = shouldCaptureAbilityInput(client)
             && entry != null
             && "piercing_blood".equals(entry.id());
-        boolean inputDown = client.options.keyUse.isDown();
+        boolean inputDown = client.options.keyAttack.isDown();
         boolean useDown = canInteract && allowByHotbar && inputDown;
 
         if (useDown && !piercingUseHeld) {

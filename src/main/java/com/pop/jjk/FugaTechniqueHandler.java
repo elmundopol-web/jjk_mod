@@ -77,12 +77,27 @@ public final class FugaTechniqueHandler {
                 continue;
             }
 
-            spawnChargeParticles(state.level, p);
+            spawnChargeParticles(state.level, p, state.ticks);
+
+            // Sonido ambiente de fuego cada 8 ticks durante la carga, con pitch que sube 0.8 -> 1.6
+            if ((state.ticks % 8) == 0 && state.ticks < FugaTechnique.OVERCHARGE_TICKS) {
+                double progress = Math.min(1.0, state.ticks / (double) FugaTechnique.OVERCHARGE_TICKS);
+                float pitch = (float) (0.8 + (progress * 0.8));
+                state.level.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.4F, pitch);
+            }
+
+            // Feedback al alcanzar la carga mínima
+            if (state.ticks == FugaTechnique.CHARGE_MIN_TICKS) {
+                Vec3 palm = palmAnchor(p);
+                state.level.playSound(null, palm.x, palm.y, palm.z, SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 0.6F, 1.8F);
+                p.displayClientMessage(Component.literal("»Open: Fuga« listo"), true);
+            }
 
             // Overcharge a los 2.0s: tintar cielo del dueño (cliente)
             if (state.ticks == FugaTechnique.OVERCHARGE_TICKS) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, new FugaOverchargeSyncPayload(120));
                 state.level.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.6F, 1.6F);
+                p.displayClientMessage(Component.literal("»Open: Fuga« overcharge"), true);
             }
 
             // Si el jugador soltó antes de mínimo, disparar cuando llegue
@@ -115,18 +130,25 @@ public final class FugaTechniqueHandler {
         }
     }
 
-    private static void spawnChargeParticles(ServerLevel level, ServerPlayer player) {
+    private static void spawnChargeParticles(ServerLevel level, ServerPlayer player, int holdTicks) {
         Vec3 palm = palmAnchor(player);
-        if ((player.tickCount & 1) == 1) return;
-        for (int i = 0; i < 2; i++) {
-            level.sendParticles(JJKParticles.FIRE_CHARGE,
-                palm.x, palm.y, palm.z,
-                1,
-                (player.getRandom().nextDouble() - 0.5) * 0.12,
-                (player.getRandom().nextDouble() - 0.5) * 0.08,
-                (player.getRandom().nextDouble() - 0.5) * 0.12,
-                0.0);
-        }
+        if ((holdTicks % 4) != 0) return;
+
+        int count = holdTicks >= FugaTechnique.CHARGE_MIN_TICKS ? 2 : 1;
+        double spreadXZ = holdTicks >= FugaTechnique.CHARGE_MIN_TICKS ? 0.10D : 0.07D;
+        double spreadY = holdTicks >= FugaTechnique.CHARGE_MIN_TICKS ? 0.06D : 0.04D;
+
+        level.sendParticles(
+            JJKParticles.FIRE_CHARGE,
+            palm.x,
+            palm.y,
+            palm.z,
+            count,
+            spreadXZ,
+            spreadY,
+            spreadXZ,
+            0.0
+        );
     }
 
     private static Vec3 palmAnchor(ServerPlayer player) {
