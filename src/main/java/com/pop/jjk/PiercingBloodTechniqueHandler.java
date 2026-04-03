@@ -2,7 +2,7 @@ package com.pop.jjk;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
@@ -17,8 +17,8 @@ public final class PiercingBloodTechniqueHandler {
     private static final int   COOLDOWN_TICKS = 25;
     private static final int   ENERGY_COST    = 80;
 
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
-    private static final Map<UUID, Integer> ACTIVE_PROJECTILES = new HashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> ACTIVE_PROJECTILES = new ConcurrentHashMap<>();
 
     private PiercingBloodTechniqueHandler() {
     }

@@ -1,8 +1,8 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -14,8 +14,8 @@ public final class CursedEnergyManager {
     private static final int REGEN_PER_SECOND = 5;
     private static final int REGEN_INTERVAL_TICKS = 20;
 
-    private static final Map<UUID, Integer> ENERGY = new HashMap<>();
-    private static final java.util.Set<UUID> INFINITE_ENERGY = new java.util.HashSet<>();
+    private static final Map<UUID, Integer> ENERGY = new ConcurrentHashMap<>();
+    private static final java.util.Set<UUID> INFINITE_ENERGY = java.util.Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private CursedEnergyManager() {
     }

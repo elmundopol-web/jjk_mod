@@ -1,13 +1,12 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -47,10 +46,10 @@ public final class InfiniteDomainTechniqueHandler {
     private static final float DOMAIN_DAMAGE_BONUS_MULTIPLIER = 0.5F;
     private static final BlockState DOMAIN_SHELL_BLOCK = Blocks.BLACK_CONCRETE.defaultBlockState();
 
-    private static final Map<UUID, ActiveDomain> ACTIVE_DOMAINS = new HashMap<>();
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
-    private static final Map<UUID, ParalyzedMobState> PARALYZED_MOBS = new HashMap<>();
-    private static final Set<UUID> BONUS_DAMAGE_GUARD = new HashSet<>();
+    private static final Map<UUID, ActiveDomain> ACTIVE_DOMAINS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, ParalyzedMobState> PARALYZED_MOBS = new ConcurrentHashMap<>();
+    private static final Set<UUID> BONUS_DAMAGE_GUARD = ConcurrentHashMap.newKeySet();
 
     private InfiniteDomainTechniqueHandler() {
     }
@@ -991,7 +990,7 @@ public final class InfiniteDomainTechniqueHandler {
             this.centerBlockZ = activationPos.getZ();
             this.floorY = activationPos.getY() + DOMAIN_FLOOR_OFFSET;
             this.ceilingY = activationPos.getY() + DOMAIN_CEILING_OFFSET;
-            this.originalBlocks = new HashMap<>();
+            this.originalBlocks = new ConcurrentHashMap<>();
             this.remainingTicks = remainingTicks;
             this.ageTicks = 0;
             this.builtWallLayers = 0;

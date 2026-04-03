@@ -1,10 +1,10 @@
 package com.pop.jjk;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
 
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
@@ -22,10 +22,10 @@ public final class SupernovaTechniqueHandler {
 
     private static final DustParticleOptions BLOOD_DUST_SMALL = new DustParticleOptions(0xFF7070, 0.7F);
 
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
-    private static final Map<UUID, HoldState> HOLDS = new HashMap<>();
-    private static final Map<UUID, List<Integer>> ORBS = new HashMap<>();
-    private static final Map<UUID, Double> ORBIT_SPEEDS = new HashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<UUID, HoldState> HOLDS = new ConcurrentHashMap<>();
+    private static final Map<UUID, List<Integer>> ORBS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Double> ORBIT_SPEEDS = new ConcurrentHashMap<>();
 
     private SupernovaTechniqueHandler() {}
 
@@ -72,7 +72,7 @@ public final class SupernovaTechniqueHandler {
         });
 
         // Tick holds: spawn orbs, increase orbit speed, ring FX
-        for (Map.Entry<UUID, HoldState> entry : new ArrayList<>(HOLDS.entrySet())) {
+        for (Map.Entry<UUID, HoldState> entry : new HashSet<>(HOLDS.entrySet())) {
             UUID pid = entry.getKey();
             HoldState state = entry.getValue();
             state.ticks++;
@@ -139,7 +139,7 @@ public final class SupernovaTechniqueHandler {
         if (list == null || list.isEmpty()) return;
         Vec3 dir = player.getLookAngle().normalize();
         ServerLevel level = (ServerLevel) player.level();
-        for (Integer id : new ArrayList<>(list)) {
+        for (Integer id : new HashSet<>(list)) {
             if (level.getEntity(id) instanceof SupernovaOrbProjectileEntity orb) {
                 orb.launch(dir);
             }

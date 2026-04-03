@@ -18,6 +18,7 @@ public class BlueOrbEntity extends Entity {
         SynchedEntityData.defineId(BlueOrbEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> LAUNCHED =
         SynchedEntityData.defineId(BlueOrbEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final int MAX_LIFETIME_TICKS = 600;
 
     public BlueOrbEntity(EntityType<? extends BlueOrbEntity> entityType, Level level) {
         super(entityType, level);
@@ -45,6 +46,10 @@ public class BlueOrbEntity extends Entity {
         this.noPhysics = true;
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
+        
+        if (this.tickCount > MAX_LIFETIME_TICKS) {
+            this.discard();
+        }
     }
 
     @Override

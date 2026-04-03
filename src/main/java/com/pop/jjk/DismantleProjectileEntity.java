@@ -31,6 +31,7 @@ public class DismantleProjectileEntity extends Projectile {
     static final int    BLOCKS_PER_TICK = 6;
     static final float  DAMAGE = 14.0F;
     static final double KNOCKBACK = 0.90;
+    static final int    MAX_LIFETIME_TICKS = 120;
 
     private final Set<UUID> hitEntityIds = new HashSet<>();
     private double distanceTravelled;
@@ -81,6 +82,11 @@ public class DismantleProjectileEntity extends Projectile {
         super.tick();
         this.noPhysics = true;
         this.setNoGravity(true);
+
+        if (this.tickCount > MAX_LIFETIME_TICKS) {
+            this.discard();
+            return;
+        }
 
         Vec3 vel = this.getDeltaMovement();
         if (vel.lengthSqr() < 1.0E-6) { this.discard(); return; }

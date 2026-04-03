@@ -1,8 +1,8 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
@@ -23,7 +23,7 @@ public final class CleaveTechniqueHandler {
     private static final double HALF_ANGLE_DEG = 30.0; // 60° total
     private static final double COS_THRESHOLD = Math.cos(Math.toRadians(HALF_ANGLE_DEG));
 
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
 
     private CleaveTechniqueHandler() {
     }

@@ -1,8 +1,8 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -14,7 +14,7 @@ public final class DismantleTechniqueHandler {
 
     private static final int COOLDOWN_TICKS = 20;
     private static final int ENERGY_COST = 60;
-    private static final Map<UUID, Integer> COOLDOWNS = new HashMap<>();
+    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
 
     private DismantleTechniqueHandler() {
     }

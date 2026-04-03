@@ -1,8 +1,8 @@
 package com.pop.jjk;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
@@ -28,7 +28,7 @@ public final class InfinityTechniqueHandler {
     private static final double PROJECTILE_HORIZONTAL_RANGE = 1.4;
     private static final double PROJECTILE_VERTICAL_RANGE = 0.9;
     private static final DustParticleOptions INFINITY_DUST = new DustParticleOptions(0xA8EEFF, 0.65F);
-    private static final Map<UUID, Boolean> INFINITY_STATES = new HashMap<>();
+    private static final Map<UUID, Boolean> INFINITY_STATES = new ConcurrentHashMap<>();
     public static final int INFINITY_ENERGY_PER_SECOND = 4;
     private static final int ENERGY_DRAIN_INTERVAL = 20;
 
@@ -45,6 +45,10 @@ public final class InfinityTechniqueHandler {
 
     public static boolean isInfinityEnabled(ServerPlayer player) {
         return INFINITY_STATES.getOrDefault(player.getUUID(), false);
+    }
+
+    public static boolean isActive(UUID playerId) {
+        return INFINITY_STATES.getOrDefault(playerId, false);
     }
 
     public static void tick(MinecraftServer server) {

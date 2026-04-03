@@ -5,9 +5,9 @@ import net.minecraft.world.entity.Display;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Estados de la técnica Azul (v2).
@@ -23,7 +23,7 @@ enum BlueState {
 final class ActiveBlue {
     final UUID ownerId;
     final ServerLevel level;
-    final List<FlyingBlock> flyingBlocks = new ArrayList<>();
+    final List<FlyingBlock> flyingBlocks = new CopyOnWriteArrayList<>();
     final BlueAbility ability = new BlueAbility();
     BlueOrbEntity orbEntity;
     Vec3 previousPosition;
