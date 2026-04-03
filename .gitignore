@@ -1,13 +1,32 @@
 ```
-.gradle/
+# Build artifacts
 build/
-target/
-*.class
 *.jar
 *.war
-*.ear
+*.class
+*.gradle/
+
+# Dependencies
+.gradle/
+lib/
+libs/
+
+# Logs and temp files
 *.log
 *.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
 Thumbs.db
 ```
