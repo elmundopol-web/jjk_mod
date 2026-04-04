@@ -501,20 +501,24 @@ public final class BlueTechniqueHandler {
 
     private static void tickCooldowns(net.minecraft.server.MinecraftServer server) {
         List<UUID> toRemove = new ArrayList<>();
-        for (Map.Entry<UUID, Integer> entry : COOLDOWNS.entrySet()) {
-            if (NO_COOLDOWN.contains(entry.getKey())) {
-                toRemove.add(entry.getKey());
+        for (UUID playerId : new ArrayList<>(COOLDOWNS.keySet())) {
+            if (NO_COOLDOWN.contains(playerId)) {
+                toRemove.add(playerId);
                 continue;
             }
-            int next = entry.getValue() - 1;
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+            int next = current - 1;
             if (next <= 0) {
-                toRemove.add(entry.getKey());
+                toRemove.add(playerId);
                 if (server != null) {
-                    ServerPlayer p = server.getPlayerList().getPlayer(entry.getKey());
+                    ServerPlayer p = server.getPlayerList().getPlayer(playerId);
                     if (p != null) syncCooldownToClient(p, 0, 0);
                 }
             } else {
-                entry.setValue(next);
+                COOLDOWNS.put(playerId, next);
             }
         }
         toRemove.forEach(COOLDOWNS::remove);

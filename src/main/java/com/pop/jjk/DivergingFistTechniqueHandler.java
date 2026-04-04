@@ -178,13 +178,17 @@ public final class DivergingFistTechniqueHandler {
     private static void tickCooldowns() {
         List<UUID> expired = new java.util.ArrayList<>();
 
-        for (java.util.Map.Entry<UUID, Integer> entry : COOLDOWNS.entrySet()) {
-            int nextValue = entry.getValue() - 1;
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+            int nextValue = current - 1;
 
             if (nextValue <= 0) {
-                expired.add(entry.getKey());
+                expired.add(playerId);
             } else {
-                entry.setValue(nextValue);
+                COOLDOWNS.put(playerId, nextValue);
             }
         }
 

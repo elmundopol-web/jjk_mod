@@ -313,6 +313,9 @@ public class JJKClientMod implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(InfiniteDomainSyncPayload.TYPE, (payload, context) ->
             context.client().execute(() -> InfiniteDomainOverlay.handleSync(payload))
         );
+        ClientPlayNetworking.registerGlobalReceiver(MalevolentShrineSyncPayload.TYPE, (payload, context) ->
+            context.client().execute(() -> MalevolentShrineOverlay.handleSync(payload))
+        );
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetClientState());
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
@@ -322,6 +325,7 @@ public class JJKClientMod implements ClientModInitializer {
             ScreenShakeManager.tick();
             com.pop.jjk.particle.effect.ParticleEffectManager.tick();
             InfiniteDomainOverlay.tick(client);
+            MalevolentShrineOverlay.tick(client);
             EnemyHealthOverlay.tick(client);
 
             // Tick Blue animation states
@@ -844,6 +848,12 @@ public class JJKClientMod implements ClientModInitializer {
             return;
         }
 
+        if ("malevolent_shrine".equals(tecnicaId)) {
+            ClientPlayNetworking.send(MalevolentShrineUsePayload.INSTANCE);
+            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            return;
+        }
+
         if ("piercing_blood".equals(tecnicaId)) {
             ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
             enfriamientoUsoTicks = USE_BUFFER_TICKS;
@@ -911,6 +921,7 @@ public class JJKClientMod implements ClientModInitializer {
         enfriamientoUsoTicks = 0;
         blueAnimStates.clear();
         InfiniteDomainOverlay.clear();
+        MalevolentShrineOverlay.clear();
         com.pop.jjk.particle.effect.ParticleEffectManager.clear();
     }
 

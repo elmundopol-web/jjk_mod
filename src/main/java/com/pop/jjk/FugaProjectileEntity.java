@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -27,11 +28,14 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 public class FugaProjectileEntity extends Projectile {
@@ -170,7 +174,10 @@ public class FugaProjectileEntity extends Projectile {
         }
 
         Vec3 movement = velocity.length() > remaining ? velocity.normalize().scale(remaining) : velocity;
-        Vec3 to = from.add(movement);
+        Vec3 intendedTo = from.add(movement);
+        BlockHitResult blockHit = level.clip(new ClipContext(from, intendedTo, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
+        boolean collidedWithBlock = blockHit.getType() == HitResult.Type.BLOCK;
+        Vec3 to = collidedWithBlock ? blockHit.getLocation() : intendedTo;
 
         burnEntitiesAlongPath(level, from, to, owner, velocity.normalize());
         igniteBlocksAlongPath(level, from, to);
@@ -189,6 +196,11 @@ public class FugaProjectileEntity extends Projectile {
             if (pos != null && canPlaceFireAt(level, pos)) {
                 level.setBlock(pos, Blocks.FIRE.defaultBlockState(), 11);
             }
+        }
+
+        if (collidedWithBlock) {
+            finish(level, owner);
+            return;
         }
 
         if (this.distanceTravelled >= effMaxDistance() || this.ticksSinceLaunch >= MAX_FLIGHT_TICKS) {
@@ -316,7 +328,7 @@ public class FugaProjectileEntity extends Projectile {
         boolean ownerHasInfinity = owner != null && InfinityTechniqueHandler.isActive(owner.getUUID());
         Vec3 ownerPush = Vec3.ZERO;
         if (owner != null && !ownerHasInfinity) {
-            ownerPush = owner.position().subtract(center).normalize().scale(knockback * 0.6D);
+            ownerPush = computeExplosionPush(center, owner.position(), knockback * 0.75D, level.random.nextDouble());
         }
 
         for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, burst, e -> e.isAlive() && e != this.getOwner())) {
@@ -325,9 +337,9 @@ public class FugaProjectileEntity extends Projectile {
                 continue;
             }
 
-            Vec3 push = entity.position().subtract(center).normalize().scale(knockback);
-            entity.push(push.x, 0.25D + (push.y * 0.1D), push.z);
-            entity.hurtMarked = true;
+            float distanceFactor = (float) Math.max(0.25D, 1.0D - (dist / (impactRadius + 0.8D)));
+            Vec3 push = computeExplosionPush(center, entity.position(), knockback * (0.9D + (distanceFactor * 0.65D)), level.random.nextDouble());
+            applyExplosionImpulse(entity, push, 0.28D + (distanceFactor * 0.34D));
             if (owner != null) {
                 entity.hurtServer(level, level.damageSources().playerAttack(owner), impactDamage);
             } else {
@@ -337,64 +349,95 @@ public class FugaProjectileEntity extends Projectile {
         }
 
         if (owner != null && !ownerHasInfinity && ownerPush.lengthSqr() > 0.0D) {
-            owner.push(ownerPush.x, 0.15D, ownerPush.z);
-            owner.hurtMarked = true;
-        }
-
-        int samples = (int) (120 + (40 * this.chargePower));
-        int igniteBudget = 32 + (int) (24 * this.chargePower);
-        BlockPos base = BlockPos.containing(center);
-        List<BlockPos> persistentFirePositions = new ArrayList<>();
-
-        for (int i = 0; i < samples; i++) {
-            double theta = level.random.nextDouble() * Math.PI * 2.0D;
-            double phi = Math.acos((level.random.nextDouble() * 2.0D) - 1.0D);
-            double radius = level.random.nextDouble() * (impactRadius + 0.6D);
-            int ox = (int) Math.round(radius * Math.sin(phi) * Math.cos(theta));
-            int oy = (int) Math.round(radius * Math.cos(phi));
-            int oz = (int) Math.round(radius * Math.sin(phi) * Math.sin(theta));
-            BlockPos pos = base.offset(ox, oy, oz);
-            if (pos.getCenter().distanceTo(center) > impactRadius + 0.6D) {
-                continue;
-            }
-            if (((pos.getX() ^ pos.getZ()) & 1) != 0) {
-                continue;
-            }
-
-            BlockPos place = canPlaceFireAt(level, pos) ? pos : canPlaceFireAt(level, pos.above()) ? pos.above() : null;
-            if (place != null && level.random.nextFloat() < 0.58F) {
-                level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
-                persistentFirePositions.add(place.immutable());
-                if (--igniteBudget <= 0) {
-                    break;
-                }
-            }
+            applyExplosionImpulse(owner, ownerPush, 0.24D);
         }
 
         if (this.chargePower >= 0.8F && owner != null) {
             destroyWeakBlocks(level, center, owner);
         }
 
+        List<BlockPos> persistentFirePositions = igniteImpactArea(level, center, impactRadius);
+
         if (!persistentFirePositions.isEmpty()) {
             createPersistentFireZone(level, persistentFirePositions, owner);
         }
     }
 
+    private List<BlockPos> igniteImpactArea(ServerLevel level, Vec3 center, double impactRadius) {
+        Set<BlockPos> firePositions = new HashSet<>();
+        BlockPos base = BlockPos.containing(center);
+        double chargeBoost = this.chargePower >= 0.99F ? 1.95D : 1.25D + (this.chargePower * 0.45D);
+        double maxRadius = impactRadius * chargeBoost;
+        int angleSteps = Math.max(72, Mth.ceil((float) (maxRadius * 14.0D)));
+        int randomBursts = 240 + Math.round(this.chargePower * 180.0F) + (this.chargePower >= 0.99F ? 220 : 0);
+
+        for (int ring = 0; ring < 7; ring++) {
+            double ringRadius = maxRadius * (0.12D + (ring * 0.13D));
+            for (int step = 0; step < angleSteps; step++) {
+                double theta = ((Math.PI * 2.0D) * step) / angleSteps;
+                double offsetX = Math.cos(theta) * ringRadius;
+                double offsetZ = Math.sin(theta) * ringRadius;
+                tryIgniteImpactPosition(level, center, firePositions, base.offset(Mth.floor(offsetX), 0, Mth.floor(offsetZ)));
+                if ((step & 1) == 0) {
+                    tryIgniteImpactPosition(level, center, firePositions, base.offset(Mth.floor(offsetX), 1, Mth.floor(offsetZ)));
+                }
+                if (this.chargePower >= 0.99F && (step % 3) == 0) {
+                    tryIgniteImpactPosition(level, center, firePositions, base.offset(Mth.floor(offsetX), -1, Mth.floor(offsetZ)));
+                }
+            }
+        }
+
+        for (int i = 0; i < randomBursts; i++) {
+            double theta = level.random.nextDouble() * Math.PI * 2.0D;
+            double radius = Math.sqrt(level.random.nextDouble()) * maxRadius;
+            int ox = Mth.floor(Math.cos(theta) * radius);
+            int oz = Mth.floor(Math.sin(theta) * radius);
+            int oy = level.random.nextIntBetweenInclusive(-2, 2);
+            tryIgniteImpactPosition(level, center, firePositions, base.offset(ox, oy, oz));
+        }
+
+        return new ArrayList<>(firePositions);
+    }
+
+    private void tryIgniteImpactPosition(ServerLevel level, Vec3 center, Set<BlockPos> firePositions, BlockPos origin) {
+        BlockPos place = findImpactFirePlacement(level, origin);
+        if (place == null) {
+            return;
+        }
+        if (place.getCenter().distanceTo(center) > (effImpactRadius() * (this.chargePower >= 0.99F ? 2.05D : 1.55D))) {
+            return;
+        }
+        if (firePositions.add(place.immutable())) {
+            level.setBlock(place, Blocks.FIRE.defaultBlockState(), 11);
+        }
+    }
+
+    private static BlockPos findImpactFirePlacement(ServerLevel level, BlockPos origin) {
+        for (int dy = 2; dy >= -3; dy--) {
+            BlockPos test = origin.offset(0, dy, 0);
+            if (canPlaceFireAt(level, test)) {
+                return test;
+            }
+        }
+        return null;
+    }
+
     private void destroyWeakBlocks(ServerLevel level, Vec3 center, ServerPlayer owner) {
         BlockPos base = BlockPos.containing(center);
-        double craterRadius = 5.0D + (2.0D * this.chargePower);
+        boolean maxCharge = this.chargePower >= 0.99F;
+        double craterRadius = (5.5D + (2.8D * this.chargePower)) + (maxCharge ? 4.5D : 0.0D);
         int radiusInt = Mth.ceil(craterRadius);
         int destroyedCount = 0;
 
         for (int ox = -radiusInt; ox <= radiusInt; ox++) {
             for (int oz = -radiusInt; oz <= radiusInt; oz++) {
-                for (int oy = -radiusInt; oy <= Math.max(1, radiusInt / 2); oy++) {
+                for (int oy = -radiusInt; oy <= Math.max(2, maxCharge ? radiusInt : radiusInt / 2); oy++) {
                     double horizontal = Math.sqrt((ox * ox) + (oz * oz));
                     if (horizontal > craterRadius) {
                         continue;
                     }
 
-                    double normalizedY = oy < 0 ? (Math.abs(oy) / craterRadius) * 0.75D : (oy / craterRadius) * 1.4D;
+                    double normalizedY = oy < 0 ? (Math.abs(oy) / craterRadius) * 0.75D : (oy / craterRadius) * (maxCharge ? 1.05D : 1.4D);
                     double normalizedDistance = Math.pow(horizontal / craterRadius, 2.0D) + (normalizedY * normalizedY);
                     if (normalizedDistance > 1.0D) {
                         continue;
@@ -424,19 +467,23 @@ public class FugaProjectileEntity extends Projectile {
     }
 
     private boolean isWeakBlock(BlockState state) {
-        return state.getBlock() == Blocks.STONE
+        return state.is(BlockTags.LOGS)
+            || state.is(BlockTags.LEAVES)
+            || state.is(BlockTags.PLANKS)
+            || state.is(BlockTags.WOODEN_STAIRS)
+            || state.is(BlockTags.WOODEN_SLABS)
+            || state.is(BlockTags.WOODEN_FENCES)
+            || state.getBlock() == Blocks.STONE
             || state.getBlock() == Blocks.COBBLESTONE
             || state.getBlock() == Blocks.DIRT
             || state.getBlock() == Blocks.GRASS_BLOCK
+            || state.getBlock() == Blocks.COARSE_DIRT
+            || state.getBlock() == Blocks.PODZOL
+            || state.getBlock() == Blocks.ROOTED_DIRT
+            || state.getBlock() == Blocks.MUD
+            || state.getBlock() == Blocks.CLAY
             || state.getBlock() == Blocks.SAND
             || state.getBlock() == Blocks.GRAVEL
-            || state.getBlock() == Blocks.OAK_LOG
-            || state.getBlock() == Blocks.BIRCH_LOG
-            || state.getBlock() == Blocks.SPRUCE_LOG
-            || state.getBlock() == Blocks.JUNGLE_LOG
-            || state.getBlock() == Blocks.ACACIA_LOG
-            || state.getBlock() == Blocks.DARK_OAK_LOG
-            || state.getBlock() == Blocks.OAK_PLANKS
             || state.getBlock() == Blocks.COBBLESTONE_WALL
             || state.getBlock() == Blocks.BRICKS
             || state.getBlock() == Blocks.NETHERRACK
@@ -505,10 +552,10 @@ public class FugaProjectileEntity extends Projectile {
     }
 
     private static void spawnExplosionParticles(ServerLevel level, Vec3 center) {
-        level.sendParticles(JJKParticles.FIRE_EXPLOSION, center.x, center.y, center.z, 88, 2.8D, 2.2D, 2.8D, 0.0D);
-        level.sendParticles(JJKParticles.FIRE_TRAIL, center.x, center.y, center.z, 32, 1.6D, 1.4D, 1.6D, 0.0D);
-        level.sendParticles(ParticleTypes.LARGE_SMOKE, center.x, center.y + 0.3D, center.z, 42, 2.4D, 1.6D, 2.4D, 0.04D);
-        level.sendParticles(ParticleTypes.FLAME, center.x, center.y + 0.2D, center.z, 64, 2.1D, 1.2D, 2.1D, 0.05D);
+        level.sendParticles(JJKParticles.FIRE_EXPLOSION, center.x, center.y, center.z, 140, 4.4D, 3.0D, 4.4D, 0.02D);
+        level.sendParticles(JJKParticles.FIRE_TRAIL, center.x, center.y, center.z, 72, 2.8D, 1.8D, 2.8D, 0.02D);
+        level.sendParticles(ParticleTypes.LARGE_SMOKE, center.x, center.y + 0.3D, center.z, 90, 3.8D, 2.4D, 3.8D, 0.06D);
+        level.sendParticles(ParticleTypes.FLAME, center.x, center.y + 0.2D, center.z, 170, 3.4D, 1.8D, 3.4D, 0.08D);
     }
 
     private static void sendExplosionFX(ServerLevel level, ServerPlayer owner, Vec3 center, float radius) {
@@ -624,6 +671,23 @@ public class FugaProjectileEntity extends Projectile {
         }
         double t = Math.max(0.0D, Math.min(1.0D, point.subtract(a).dot(ab) / len2));
         return point.distanceTo(a.add(ab.scale(t)));
+    }
+
+    private static Vec3 computeExplosionPush(Vec3 center, Vec3 target, double strength, double randomSeed) {
+        Vec3 push = target.subtract(center);
+        if (push.lengthSqr() < 1.0E-4D) {
+            double angle = randomSeed * Math.PI * 2.0D;
+            push = new Vec3(Math.cos(angle), 0.0D, Math.sin(angle));
+        } else {
+            push = push.normalize();
+        }
+        return push.scale(strength);
+    }
+
+    private static void applyExplosionImpulse(LivingEntity entity, Vec3 horizontalPush, double upwardPush) {
+        Vec3 impulse = new Vec3(horizontalPush.x, upwardPush, horizontalPush.z);
+        entity.setDeltaMovement(entity.getDeltaMovement().add(impulse));
+        entity.hurtMarked = true;
     }
 
     private static void sendShakeToNearby(ServerLevel level, Vec3 center, float intensity, int durationTicks) {

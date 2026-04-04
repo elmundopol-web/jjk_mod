@@ -31,6 +31,7 @@ public final class JJKCommands {
 
         if (enabled) {
             InfiniteDomainTechniqueHandler.clearCooldown(player);
+            MalevolentShrineTechniqueHandler.clearCooldown(player);
             PiercingBloodTechniqueHandler.clearCooldown(player);
             FlowingRedScaleTechniqueHandler.clearCooldown(player);
             SupernovaTechniqueHandler.clearCooldown(player);
@@ -46,6 +47,7 @@ public final class JJKCommands {
         ServerPlayer player = source.getPlayerOrException();
         BlueTechniqueHandler.clearCooldown(player);
         InfiniteDomainTechniqueHandler.clearCooldown(player);
+        MalevolentShrineTechniqueHandler.clearCooldown(player);
         PiercingBloodTechniqueHandler.clearCooldown(player);
         FlowingRedScaleTechniqueHandler.clearCooldown(player);
         SupernovaTechniqueHandler.clearCooldown(player);

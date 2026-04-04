@@ -75,13 +75,24 @@ public final class PiercingBloodTechniqueHandler {
     }
 
     public static void tick() {
-        COOLDOWNS.entrySet().removeIf(entry -> {
-            if (BlueTechniqueHandler.hasNoCooldown(entry.getKey())) return true;
-            int next = entry.getValue() - 1;
-            if (next <= 0) return true;
-            entry.setValue(next);
-            return false;
-        });
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            if (BlueTechniqueHandler.hasNoCooldown(playerId)) {
+                COOLDOWNS.remove(playerId);
+                continue;
+            }
+
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+
+            int next = current - 1;
+            if (next <= 0) {
+                COOLDOWNS.remove(playerId);
+            } else {
+                COOLDOWNS.put(playerId, next);
+            }
+        }
 
     }
 

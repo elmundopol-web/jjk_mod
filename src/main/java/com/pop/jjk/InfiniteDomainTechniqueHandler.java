@@ -108,17 +108,17 @@ public final class InfiniteDomainTechniqueHandler {
         tickCooldowns(server);
 
         Set<UUID> paralyzedThisTick = new java.util.HashSet<>();
-        Iterator<Map.Entry<UUID, ActiveDomain>> iterator = ACTIVE_DOMAINS.entrySet().iterator();
+        Set<UUID> domainsToRemove = new java.util.HashSet<>();
 
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, ActiveDomain> entry = iterator.next();
+        for (Map.Entry<UUID, ActiveDomain> entry : new java.util.ArrayList<>(ACTIVE_DOMAINS.entrySet())) {
+            UUID ownerId = entry.getKey();
             ActiveDomain domain = entry.getValue();
-            ServerPlayer owner = server.getPlayerList().getPlayer(entry.getKey());
+            ServerPlayer owner = server.getPlayerList().getPlayer(ownerId);
 
             if (owner == null || !owner.isAlive() || owner.level() != domain.level) {
                 restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
-                iterator.remove();
+                domainsToRemove.add(ownerId);
                 continue;
             }
 
@@ -165,9 +165,11 @@ public final class InfiniteDomainTechniqueHandler {
                 domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.8F, 0.6F);
                 restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
-                iterator.remove();
+                domainsToRemove.add(ownerId);
             }
         }
+
+        domainsToRemove.forEach(ACTIVE_DOMAINS::remove);
 
         restoreReleasedMobs(paralyzedThisTick);
     }
@@ -280,22 +282,23 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void restoreReleasedMobs(Set<UUID> paralyzedThisTick) {
-        Iterator<Map.Entry<UUID, ParalyzedMobState>> iterator = PARALYZED_MOBS.entrySet().iterator();
+        Set<UUID> toRemove = new java.util.HashSet<>();
 
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, ParalyzedMobState> entry = iterator.next();
+        for (Map.Entry<UUID, ParalyzedMobState> entry : new java.util.ArrayList<>(PARALYZED_MOBS.entrySet())) {
             ParalyzedMobState state = entry.getValue();
 
             if (paralyzedThisTick.contains(entry.getKey())) {
                 if (state.mob == null || !state.mob.isAlive()) {
-                    iterator.remove();
+                    toRemove.add(entry.getKey());
                 }
                 continue;
             }
 
             restoreMobState(state);
-            iterator.remove();
+            toRemove.add(entry.getKey());
         }
+
+        toRemove.forEach(PARALYZED_MOBS::remove);
     }
 
     private static void restoreMobState(ParalyzedMobState state) {
@@ -815,22 +818,25 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void tickCooldowns(MinecraftServer server) {
-        Iterator<Map.Entry<UUID, Integer>> iterator = COOLDOWNS.entrySet().iterator();
-
-        while (iterator.hasNext()) {
-            Map.Entry<UUID, Integer> entry = iterator.next();
-            int next = entry.getValue() - 1;
+        Set<UUID> expired = new java.util.HashSet<>();
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+            int next = current - 1;
 
             if (next <= 0) {
-                ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
                 if (player != null) {
                     syncCooldownToClient(player, 0, 0);
                 }
-                iterator.remove();
+                expired.add(playerId);
             } else {
-                entry.setValue(next);
+                COOLDOWNS.put(playerId, next);
             }
         }
+        expired.forEach(COOLDOWNS::remove);
     }
 
     private static void syncCooldownToClient(ServerPlayer player, int remaining, int total) {

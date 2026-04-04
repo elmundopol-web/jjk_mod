@@ -116,6 +116,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(RedTechniqueUsePayload.TYPE, RedTechniqueUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(PurpleTechniqueUsePayload.TYPE, PurpleTechniqueUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(InfiniteDomainUsePayload.TYPE, InfiniteDomainUsePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(MalevolentShrineUsePayload.TYPE, MalevolentShrineUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DivergingFistUsePayload.TYPE, DivergingFistUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(PiercingBloodUsePayload.TYPE, PiercingBloodUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(PiercingBloodHoldPayload.TYPE, PiercingBloodHoldPayload.STREAM_CODEC);
@@ -134,6 +135,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(ScreenShakePayload.TYPE, ScreenShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(BlueAnimSyncPayload.TYPE, BlueAnimSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(InfiniteDomainSyncPayload.TYPE, InfiniteDomainSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(MalevolentShrineSyncPayload.TYPE, MalevolentShrineSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(FugaBeamFXPayload.TYPE, FugaBeamFXPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(FugaOverchargeSyncPayload.TYPE, FugaOverchargeSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(FugaExplosionFXPayload.TYPE, FugaExplosionFXPayload.STREAM_CODEC);
@@ -152,6 +154,9 @@ public class JJKMod implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(InfiniteDomainUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfiniteDomainTechniqueHandler.activate(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(MalevolentShrineUsePayload.TYPE, (payload, context) ->
+            context.server().execute(() -> MalevolentShrineTechniqueHandler.activate(context.player()))
         );
         ServerPlayNetworking.registerGlobalReceiver(DivergingFistUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> DivergingFistTechniqueHandler.activate(context.player()))
@@ -193,12 +198,14 @@ public class JJKMod implements ModInitializer {
             CharacterSelectionHandler.syncCharacterToClient(handler.player);
             CursedEnergyManager.onPlayerJoin(handler.player);
             InfiniteDomainTechniqueHandler.syncActiveDomainsToPlayer(handler.player);
+            MalevolentShrineTechniqueHandler.syncActiveDomainsToPlayer(handler.player);
         });
         JJKCommands.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(InfinityTechniqueHandler::allowDamage);
         ServerLivingEntityEvents.AFTER_DAMAGE.register(InfiniteDomainTechniqueHandler::afterDamage);
         ServerTickEvents.END_SERVER_TICK.register(server -> BlueTechniqueHandler.tickActive(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> InfiniteDomainTechniqueHandler.tick(server));
+        ServerTickEvents.END_SERVER_TICK.register(server -> MalevolentShrineTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> DivergingFistTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> PiercingBloodTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> FlowingRedScaleTechniqueHandler.tick());
@@ -211,6 +218,7 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> BlueTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfiniteDomainTechniqueHandler.clearAll());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> MalevolentShrineTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DivergingFistTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> PiercingBloodTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FlowingRedScaleTechniqueHandler.clearActive());

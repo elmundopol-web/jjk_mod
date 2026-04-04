@@ -63,27 +63,34 @@ public final class FlowingRedScaleTechniqueHandler {
     }
 
     public static void tick() {
-        COOLDOWNS.entrySet().removeIf(entry -> {
-            int next = entry.getValue() - 1;
-            if (next <= 0) return true;
-            entry.setValue(next);
-            return false;
-        });
-
-        java.util.Iterator<java.util.Map.Entry<UUID, ActiveBuff>> it = ACTIVE.entrySet().iterator();
-        while (it.hasNext()) {
-            java.util.Map.Entry<UUID, ActiveBuff> e = it.next();
-            ActiveBuff buff = e.getValue();
-            buff.remainingTicks--;
-            if (buff.remainingTicks <= 0) {
-                it.remove();
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
                 continue;
             }
-            ServerPlayer p = buff.level.getServer().getPlayerList().getPlayer(e.getKey());
+            int next = current - 1;
+            if (next <= 0) {
+                COOLDOWNS.remove(playerId);
+            } else {
+                COOLDOWNS.put(playerId, next);
+            }
+        }
+
+        for (UUID playerId : new java.util.ArrayList<>(ACTIVE.keySet())) {
+            ActiveBuff buff = ACTIVE.get(playerId);
+            if (buff == null) {
+                continue;
+            }
+            buff.remainingTicks--;
+            if (buff.remainingTicks <= 0) {
+                ACTIVE.remove(playerId);
+                continue;
+            }
+            ServerPlayer p = buff.level.getServer().getPlayerList().getPlayer(playerId);
             if (p != null && p.isAlive() && p.level() == buff.level) {
                 spawnOngoingParticles(buff.level, p);
             } else {
-                it.remove();
+                ACTIVE.remove(playerId);
             }
         }
     }

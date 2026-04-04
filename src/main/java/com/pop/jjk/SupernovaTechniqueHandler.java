@@ -63,13 +63,18 @@ public final class SupernovaTechniqueHandler {
     }
 
     public static void tick() {
-        // Tick cooldowns
-        COOLDOWNS.entrySet().removeIf(entry -> {
-            int next = entry.getValue() - 1;
-            if (next <= 0) return true;
-            entry.setValue(next);
-            return false;
-        });
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+            int next = current - 1;
+            if (next <= 0) {
+                COOLDOWNS.remove(playerId);
+            } else {
+                COOLDOWNS.put(playerId, next);
+            }
+        }
 
         // Tick holds: spawn orbs, increase orbit speed, ring FX
         for (Map.Entry<UUID, HoldState> entry : new HashSet<>(HOLDS.entrySet())) {

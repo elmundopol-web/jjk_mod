@@ -82,11 +82,17 @@ public final class CleaveTechniqueHandler {
 
     public static void tick() {
         if (COOLDOWNS.isEmpty()) return;
-        var it = COOLDOWNS.entrySet().iterator();
-        while (it.hasNext()) {
-            var e = it.next();
-            int next = e.getValue() - 1;
-            if (next <= 0) it.remove(); else e.setValue(next);
+        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
+            Integer current = COOLDOWNS.get(playerId);
+            if (current == null) {
+                continue;
+            }
+            int next = current - 1;
+            if (next <= 0) {
+                COOLDOWNS.remove(playerId);
+            } else {
+                COOLDOWNS.put(playerId, next);
+            }
         }
     }
 

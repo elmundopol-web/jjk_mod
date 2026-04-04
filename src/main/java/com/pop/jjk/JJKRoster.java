@@ -23,7 +23,7 @@ public final class JJKRoster {
         registerTechnique("dismantle", "technique.jjk.dismantle", "technique.jjk.dismantle_desc", "technique.jjk.dismantle_hint", 0xC94848, true);
         registerTechnique("cleave", "technique.jjk.cleave", "technique.jjk.cleave_desc", "technique.jjk.cleave_hint", 0xF08080, true);
         registerTechnique("fuga", "technique.jjk.fuga", "technique.jjk.fuga_desc", "technique.jjk.fuga_hint", 0xFF7A00, true);
-        registerTechnique("malevolent_shrine", "technique.jjk.malevolent_shrine", "technique.jjk.malevolent_shrine_desc", "technique.jjk.malevolent_shrine_hint", 0x8B2A2A, false);
+        registerTechnique("malevolent_shrine", "technique.jjk.malevolent_shrine", "technique.jjk.malevolent_shrine_desc", "technique.jjk.malevolent_shrine_hint", 0x8B2A2A, true);
         registerTechnique("divine_dog", "technique.jjk.divine_dog", "technique.jjk.divine_dog_desc", "technique.jjk.divine_dog_hint", 0x8AA5C7, false);
         registerTechnique("nue", "technique.jjk.nue", "technique.jjk.nue_desc", "technique.jjk.nue_hint", 0x7282D8, false);
         registerTechnique("max_elephant", "technique.jjk.max_elephant", "technique.jjk.max_elephant_desc", "technique.jjk.max_elephant_hint", 0x5F86A6, false);
