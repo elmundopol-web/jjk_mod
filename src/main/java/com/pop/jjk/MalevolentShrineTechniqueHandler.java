@@ -9,6 +9,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -31,6 +35,12 @@ public final class MalevolentShrineTechniqueHandler {
     private static final double DOMAIN_RADIUS = 25.0D;
     private static final double DOMAIN_RADIUS_SQR = DOMAIN_RADIUS * DOMAIN_RADIUS;
     private static final float BASE_DAMAGE = 1.5F;
+    private static final DustParticleOptions SHRINE_RED_DUST = new DustParticleOptions(0xCC0000, 1.2F);
+    private static final DustParticleOptions SHRINE_DARK_RED_DUST = new DustParticleOptions(0x1A0000, 1.5F);
+    private static final DustParticleOptions SHRINE_BLACK_DUST = new DustParticleOptions(0x0A0A0A, 2.0F);
+    private static final int SLASH_PARTICLE_BURSTS = 34;
+    private static final int ENVIRONMENT_SLASH_INTERVAL = 4;
+    private static final int ENVIRONMENT_SLASH_COUNT = 14;
 
     private static final Map<UUID, ActiveShrine> ACTIVE_SHRINES = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
@@ -111,12 +121,24 @@ public final class MalevolentShrineTechniqueHandler {
                 spawnSlashParticles(shrine);
             }
 
+            if ((shrine.ageTicks % ENVIRONMENT_SLASH_INTERVAL) == 0) {
+                sliceEnvironment(shrine, owner);
+            }
+
             if ((shrine.ageTicks % 5) == 0) {
                 sendScreenShake(shrine);
             }
 
+            if ((shrine.ageTicks % 8) == 0) {
+                playSlashAmbience(shrine);
+            }
+
             if ((shrine.ageTicks % 30) == 0) {
                 shrine.level.playSound(null, owner.blockPosition(), SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, 0.4F, 0.7F + (shrine.level.random.nextFloat() * 0.2F));
+            }
+
+            if ((shrine.ageTicks % 60) == 0) {
+                shrine.level.playSound(null, owner.blockPosition(), SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.3F, 1.4F);
             }
 
             if (shrine.remainingTicks <= 0) {
@@ -176,17 +198,10 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void spawnSlashParticles(ActiveShrine shrine) {
-        int slashBursts = 18;
-        double minY = shrine.center.y - 2.0D;
-        double maxY = shrine.center.y + 6.0D;
-        for (int i = 0; i < slashBursts; i++) {
-            double radius = DOMAIN_RADIUS * Math.sqrt(shrine.level.random.nextDouble());
-            double angle = shrine.level.random.nextDouble() * Math.PI * 2.0D;
-            double x = shrine.center.x + Math.cos(angle) * radius;
-            double z = shrine.center.z + Math.sin(angle) * radius;
-            double y = Mth.lerp(shrine.level.random.nextDouble(), minY, maxY);
-            shrine.level.sendParticles(ParticleTypes.CRIT, x, y, z, 3, 0.18D, 0.18D, 0.18D, 0.08D);
-            shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, x, y, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        double minY = shrine.center.y - 3.0D;
+        double maxY = shrine.center.y + 8.5D;
+        for (int i = 0; i < SLASH_PARTICLE_BURSTS; i++) {
+            emitSlashLine(shrine, minY, maxY, false, null);
         }
     }
 
@@ -199,16 +214,32 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void spawnActivationParticles(ActiveShrine shrine) {
-        for (int i = 0; i < 36; i++) {
-            double angle = (Math.PI * 2.0D * i) / 36.0D;
-            double x = shrine.center.x + Math.cos(angle) * DOMAIN_RADIUS;
-            double z = shrine.center.z + Math.sin(angle) * DOMAIN_RADIUS;
-            shrine.level.sendParticles(ParticleTypes.CRIT, x, shrine.center.y + 0.5D, z, 4, 0.25D, 0.6D, 0.25D, 0.12D);
-            shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, x, shrine.center.y + 0.25D, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        double[] rings = new double[] {8.0D, 15.0D, DOMAIN_RADIUS};
+        for (double ringRadius : rings) {
+            int points = Math.max(20, Mth.ceil((float) (ringRadius * 2.4D)));
+            for (int i = 0; i < points; i++) {
+                double angle = (Math.PI * 2.0D * i) / points;
+                double spiralOffset = (i / (double) points) * Math.PI * 1.4D;
+                double x = shrine.center.x + Math.cos(angle + spiralOffset) * ringRadius;
+                double z = shrine.center.z + Math.sin(angle + spiralOffset) * ringRadius;
+                shrine.level.sendParticles(ParticleTypes.CRIT, x, shrine.center.y + 0.55D, z, 3, 0.22D, 0.35D, 0.22D, 0.08D);
+                shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, x, shrine.center.y + 0.25D, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                shrine.level.sendParticles(ParticleTypes.LARGE_SMOKE, x, shrine.center.y + 0.1D, z, 2, 0.15D, 0.65D, 0.15D, 0.03D);
+            }
         }
 
         shrine.level.sendParticles(ParticleTypes.SMOKE, shrine.center.x, shrine.center.y + 1.0D, shrine.center.z, 30, 1.6D, 1.2D, 1.6D, 0.03D);
         shrine.level.sendParticles(ParticleTypes.CRIT, shrine.center.x, shrine.center.y + 1.5D, shrine.center.z, 28, 1.4D, 2.0D, 1.4D, 0.12D);
+        shrine.level.sendParticles(SHRINE_BLACK_DUST, shrine.center.x, shrine.center.y + 1.8D, shrine.center.z, 24, 4.5D, 2.0D, 4.5D, 0.02D);
+    }
+
+    private static void playSlashAmbience(ActiveShrine shrine) {
+        double radius = DOMAIN_RADIUS * Math.sqrt(shrine.level.random.nextDouble());
+        double angle = shrine.level.random.nextDouble() * Math.PI * 2.0D;
+        double x = shrine.center.x + Math.cos(angle) * radius;
+        double z = shrine.center.z + Math.sin(angle) * radius;
+        double y = shrine.center.y + Mth.lerp(shrine.level.random.nextDouble(), -1.0D, 4.0D);
+        shrine.level.playSound(null, x, y, z, SoundEvents.PLAYER_ATTACK_SWEEP, SoundSource.PLAYERS, 0.15F, 0.6F + (shrine.level.random.nextFloat() * 0.3F));
     }
 
     private static float getInsideFactor(LivingEntity entity, ActiveShrine shrine) {
@@ -225,6 +256,106 @@ public final class MalevolentShrineTechniqueHandler {
 
     private static Vec3 getEntityCenter(LivingEntity entity) {
         return entity.position().add(0.0D, entity.getBbHeight() * 0.5D, 0.0D);
+    }
+
+    private static void sliceEnvironment(ActiveShrine shrine, ServerPlayer owner) {
+        double minY = shrine.center.y - 2.0D;
+        double maxY = shrine.center.y + 12.0D;
+        int destroyed = 0;
+
+        for (int i = 0; i < ENVIRONMENT_SLASH_COUNT; i++) {
+            destroyed += emitSlashLine(shrine, minY, maxY, true, owner);
+        }
+
+        if (destroyed > 0) {
+            float pitch = 0.55F + (shrine.level.random.nextFloat() * 0.25F);
+            shrine.level.playSound(null, shrine.center.x, shrine.center.y, shrine.center.z, SoundEvents.PLAYER_ATTACK_SWEEP, SoundSource.BLOCKS, 0.18F, pitch);
+        }
+    }
+
+    private static int emitSlashLine(ActiveShrine shrine, double minY, double maxY, boolean breakEnvironment, ServerPlayer owner) {
+        double radius = DOMAIN_RADIUS * Math.sqrt(shrine.level.random.nextDouble());
+        double angle = shrine.level.random.nextDouble() * Math.PI * 2.0D;
+        double x = shrine.center.x + Math.cos(angle) * radius;
+        double z = shrine.center.z + Math.sin(angle) * radius;
+        double y = Mth.lerp(shrine.level.random.nextDouble(), minY, maxY);
+
+        double baseAngle = shrine.level.random.nextDouble() * Math.PI * 2.0D;
+        double basePitch = Math.toRadians(Mth.lerp(shrine.level.random.nextDouble(), -20.0D, 20.0D));
+        double speed = Mth.lerp(shrine.level.random.nextDouble(), 0.18D, 0.28D);
+        int streakLength = 4 + shrine.level.random.nextInt(3);
+        int destroyed = 0;
+
+        shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, x, y, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        for (int streak = 0; streak < streakLength; streak++) {
+            double angleOffset = Math.toRadians(Mth.lerp(shrine.level.random.nextDouble(), -30.0D, 30.0D));
+            double pitchOffset = Math.toRadians(Mth.lerp(shrine.level.random.nextDouble(), -12.0D, 12.0D));
+            double slashAngle = baseAngle + angleOffset;
+            double slashPitch = basePitch + pitchOffset;
+            double horizontalSpeed = speed * Math.cos(slashPitch);
+            double vx = Math.cos(slashAngle) * horizontalSpeed;
+            double vy = Math.sin(slashPitch) * speed;
+            double vz = Math.sin(slashAngle) * horizontalSpeed;
+            double px = x + (vx * streak * 0.75D);
+            double py = y + (vy * streak * 0.75D);
+            double pz = z + (vz * streak * 0.75D);
+
+            shrine.level.sendParticles(ParticleTypes.CRIT, px, py, pz, 2, vx, vy, vz, 0.0D);
+            shrine.level.sendParticles(SHRINE_RED_DUST, px, py, pz, 2, vx, vy, vz, 0.0D);
+            if ((streak & 1) == 0) {
+                shrine.level.sendParticles(SHRINE_DARK_RED_DUST, px, py, pz, 2, vx * 0.9D, vy, vz * 0.9D, 0.0D);
+            } else {
+                shrine.level.sendParticles(SHRINE_BLACK_DUST, px, py, pz, 2, vx * 0.7D, vy, vz * 0.7D, 0.0D);
+            }
+
+            if (breakEnvironment) {
+                destroyed += destroySlashBlocks(shrine, owner, px, py, pz);
+            }
+        }
+
+        return destroyed;
+    }
+
+    private static int destroySlashBlocks(ActiveShrine shrine, ServerPlayer owner, double x, double y, double z) {
+        int destroyed = 0;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int baseX = Mth.floor(x);
+        int baseY = Mth.floor(y);
+        int baseZ = Mth.floor(z);
+
+        for (int ox = -1; ox <= 1; ox++) {
+            for (int oy = -1; oy <= 1; oy++) {
+                for (int oz = -1; oz <= 1; oz++) {
+                    cursor.set(baseX + ox, baseY + oy, baseZ + oz);
+                    if (InfiniteDomainTechniqueHandler.isProtectedDomainBlock(shrine.level, cursor)) {
+                        continue;
+                    }
+
+                    BlockState state = shrine.level.getBlockState(cursor);
+                    if (!isShrineSliceable(state)) {
+                        continue;
+                    }
+
+                    if (shrine.level.destroyBlock(cursor, false, owner)) {
+                        destroyed++;
+                    }
+                }
+            }
+        }
+
+        return destroyed;
+    }
+
+    private static boolean isShrineSliceable(BlockState state) {
+        return state.is(BlockTags.LOGS)
+            || state.is(BlockTags.LEAVES)
+            || state.is(BlockTags.PLANKS)
+            || state.is(BlockTags.WOODEN_STAIRS)
+            || state.is(BlockTags.WOODEN_SLABS)
+            || state.is(BlockTags.WOODEN_FENCES)
+            || state.is(BlockTags.SAPLINGS)
+            || state.is(BlockTags.FLOWERS)
+            || state.is(BlockTags.REPLACEABLE_BY_TREES);
     }
 
     private static void tickCooldowns(MinecraftServer server) {

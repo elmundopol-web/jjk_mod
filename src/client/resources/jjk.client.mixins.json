@@ -5,6 +5,7 @@
 	"client": [
 		"InfiniteDomainFogRendererMixin",
 		"MalevolentShrineFogMixin",
+		"MalevolentShrineSkyMixin",
 		"InfiniteDomainLevelRendererMixin",
 		"FugaSkyTintLevelRendererMixin",
 		"BlueFirstPersonTransformMixin",
