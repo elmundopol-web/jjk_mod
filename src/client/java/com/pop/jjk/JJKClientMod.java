@@ -855,8 +855,7 @@ public class JJKClientMod implements ClientModInitializer {
         }
 
         if ("piercing_blood".equals(tecnicaId)) {
-            ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
-            enfriamientoUsoTicks = USE_BUFFER_TICKS;
+            // Piercing Blood se dispara solo por input sostenido.
             return;
         }
 
