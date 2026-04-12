@@ -26,10 +26,10 @@ public abstract class MalevolentShrineFogMixin {
             return color;
         }
 
-        float keepFactor = 1.0F - visualFactor;
-        float red = (color.x * keepFactor) + (0.25F * visualFactor);
-        float green = color.y * keepFactor;
-        float blue = color.z * keepFactor;
+        float keepFactor = 1.0F - (visualFactor * 0.92F);
+        float red = (color.x * keepFactor) + (0.34F * visualFactor);
+        float green = (color.y * (keepFactor * 0.32F)) + (0.01F * visualFactor);
+        float blue = (color.z * (keepFactor * 0.25F)) + (0.015F * visualFactor);
         color.set(red, green, blue, 1.0F);
         return color;
     }
@@ -50,7 +50,7 @@ public abstract class MalevolentShrineFogMixin {
         }
 
         float density = visualFactor * visualFactor;
-        float multiplier = 1.0F - (0.68F * density);
-        return Math.max(10.0F, renderDistanceBlocks * multiplier);
+        float multiplier = 1.0F - (0.78F * density);
+        return Math.max(8.0F, renderDistanceBlocks * multiplier);
     }
 }

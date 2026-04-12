@@ -669,15 +669,30 @@ public class JJKClientMod implements ClientModInitializer {
         boolean useDown = canInteract && allowByHotbar && inputDown;
 
         if (useDown && !piercingUseHeld) {
+            debugPiercingBloodClient("press/use payload", client, entry);
             ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
         }
         if (useDown) {
             ClientPlayNetworking.send(new PiercingBloodHoldPayload(true));
         }
         if (!useDown && piercingUseHeld) {
+            debugPiercingBloodClient("release/hold false", client, entry);
             ClientPlayNetworking.send(new PiercingBloodHoldPayload(false));
         }
         piercingUseHeld = useDown;
+    }
+
+    private static void debugPiercingBloodClient(String event, Minecraft client, AbilityHotbarEntry entry) {
+        String selectedId = entry == null ? "null" : entry.id();
+        String playerName = client.player == null ? "null" : client.player.getName().getString();
+        System.out.println(
+            "[PB_DEBUG][client][" + playerName + "] "
+                + event
+                + " selected=" + selectedId
+                + " activeTechnique=" + tecnicaActivaId
+                + " hotbarVisible=" + abilityHotbarVisible
+                + " screen=" + (client.screen == null ? "null" : client.screen.getClass().getSimpleName())
+        );
     }
 
     private static void tickBlueAnimationStates() {

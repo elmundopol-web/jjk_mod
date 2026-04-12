@@ -207,7 +207,7 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> InfiniteDomainTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> MalevolentShrineTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> DivergingFistTechniqueHandler.tick());
-        ServerTickEvents.END_SERVER_TICK.register(server -> PiercingBloodTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(PiercingBloodTechniqueHandler::tick);
         ServerTickEvents.END_SERVER_TICK.register(server -> FlowingRedScaleTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> SupernovaTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> DismantleTechniqueHandler.tick());

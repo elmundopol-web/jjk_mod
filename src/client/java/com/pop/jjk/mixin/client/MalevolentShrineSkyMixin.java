@@ -28,26 +28,26 @@ public abstract class MalevolentShrineSkyMixin {
             return;
         }
 
-        float keepFactor = Math.max(0.42F, 1.0F - (0.58F * visualFactor));
+        float keepFactor = Math.max(0.30F, 1.0F - (0.70F * visualFactor));
         state.skyColor = tintRgb(state.skyColor, keepFactor, visualFactor);
         state.sunriseAndSunsetColor = tintArgb(state.sunriseAndSunsetColor, keepFactor, visualFactor);
-        state.starBrightness *= Math.max(0.18F, keepFactor * 0.45F);
-        state.rainBrightness *= keepFactor * 0.75F;
-        state.endFlashIntensity *= keepFactor * 0.7F;
+        state.starBrightness *= Math.max(0.08F, keepFactor * 0.28F);
+        state.rainBrightness *= keepFactor * 0.55F;
+        state.endFlashIntensity *= keepFactor * 0.45F;
     }
 
     private static int tintRgb(int color, float keepFactor, float visualFactor) {
-        int red = Math.round((((color >> 16) & 0xFF) * keepFactor) + (110.0F * visualFactor));
-        int green = Math.round((((color >> 8) & 0xFF) * (keepFactor * 0.42F)) + (8.0F * visualFactor));
-        int blue = Math.round(((color & 0xFF) * (keepFactor * 0.32F)) + (14.0F * visualFactor));
+        int red = Math.round((((color >> 16) & 0xFF) * keepFactor) + (150.0F * visualFactor));
+        int green = Math.round((((color >> 8) & 0xFF) * (keepFactor * 0.22F)) + (6.0F * visualFactor));
+        int blue = Math.round(((color & 0xFF) * (keepFactor * 0.18F)) + (10.0F * visualFactor));
         return (Mth.clamp(red, 0, 255) << 16) | (Mth.clamp(green, 0, 255) << 8) | Mth.clamp(blue, 0, 255);
     }
 
     private static int tintArgb(int color, float keepFactor, float visualFactor) {
         int alpha = (color >>> 24) & 0xFF;
-        int red = Math.round((((color >> 16) & 0xFF) * keepFactor) + (122.0F * visualFactor));
-        int green = Math.round((((color >> 8) & 0xFF) * (keepFactor * 0.35F)) + (8.0F * visualFactor));
-        int blue = Math.round(((color & 0xFF) * (keepFactor * 0.28F)) + (12.0F * visualFactor));
+        int red = Math.round((((color >> 16) & 0xFF) * keepFactor) + (162.0F * visualFactor));
+        int green = Math.round((((color >> 8) & 0xFF) * (keepFactor * 0.18F)) + (6.0F * visualFactor));
+        int blue = Math.round(((color & 0xFF) * (keepFactor * 0.15F)) + (10.0F * visualFactor));
         return (alpha << 24) | (Mth.clamp(red, 0, 255) << 16) | (Mth.clamp(green, 0, 255) << 8) | Mth.clamp(blue, 0, 255);
     }
 }

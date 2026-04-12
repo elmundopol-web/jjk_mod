@@ -17,6 +17,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -52,6 +53,11 @@ public class PiercingBloodProjectileEntity extends Projectile {
     private int graceUntilTick = -1;
     private int releaseTicksRemaining = 0;
     private float chargeDamageMultiplier = 1.0F;
+    private int maxHeldTicks = 10;
+    private double heldSpeed = 2.5D;
+    private double hitRadius = 0.55D;
+    private boolean cleanupNotified;
+    private UUID ownerUuid;
 
     public PiercingBloodProjectileEntity(EntityType<? extends PiercingBloodProjectileEntity> type, Level level) {
         super(type, level);
@@ -74,6 +80,8 @@ public class PiercingBloodProjectileEntity extends Projectile {
         this.held = false;
         this.graceUntilTick = -1;
         this.holdTicks = 0;
+        this.cleanupNotified = false;
+        this.ownerUuid = owner.getUUID();
     }
 
     @Override
@@ -133,7 +141,7 @@ public class PiercingBloodProjectileEntity extends Projectile {
             }
 
             if (this.held) {
-                currentSpeed = this.tickCount >= 3 ? HELD_SPEED : baseSpeed;
+                currentSpeed = this.tickCount >= 3 ? this.heldSpeed : baseSpeed;
             } else {
                 currentSpeed = baseSpeed;
                 if (currentSpeed <= MIN_SPEED) {
@@ -150,6 +158,9 @@ public class PiercingBloodProjectileEntity extends Projectile {
         this.setDeltaMovement(currentDir.scale(currentSpeed));
         if (this.held) {
             this.holdTicks++;
+            if (this.holdTicks >= this.maxHeldTicks) {
+                this.setHeld(false);
+            }
         }
 
         double remaining = (this.held || this.releaseTicksRemaining > 0)
@@ -176,6 +187,13 @@ public class PiercingBloodProjectileEntity extends Projectile {
         this.updateRotation();
 
         if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+
+        if (this.tickCount >= (this.maxHeldTicks + MAX_LIFETIME + 20)) {
+            spawnTrailEnd(serverLevel, next);
+            notifyDied();
+            this.discard();
             return;
         }
 
@@ -225,7 +243,7 @@ public class PiercingBloodProjectileEntity extends Projectile {
 
     private void hitEntitiesAlongPath(ServerLevel level, Vec3 from, Vec3 to, Vec3 dir, float currentDamage) {
         double segLen = from.distanceTo(to);
-        AABB box = new AABB(from, to).inflate(HIT_RADIUS);
+        AABB box = new AABB(from, to).inflate(this.hitRadius);
 
         for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, box, candidate -> candidate.isAlive() && candidate != this.getOwner())) {
             if (this.hitEntityIds.contains(entity.getUUID())) {
@@ -237,7 +255,7 @@ public class PiercingBloodProjectileEntity extends Projectile {
             double projection = Math.max(0.0D, Math.min(segLen, toEntity.dot(dir)));
             Vec3 closest = from.add(dir.scale(projection));
 
-            if (closest.distanceTo(center) > HIT_RADIUS + (entity.getBbWidth() * 0.5D)) {
+            if (closest.distanceTo(center) > this.hitRadius + (entity.getBbWidth() * 0.5D)) {
                 continue;
             }
 
@@ -375,6 +393,9 @@ public class PiercingBloodProjectileEntity extends Projectile {
         if (held) {
             this.graceUntilTick = -1;
             this.releaseTicksRemaining = 0;
+            if (!wasHeld) {
+                this.holdTicks = 0;
+            }
         } else if (wasHeld) {
             this.releaseTicksRemaining = 10;
         }
@@ -391,7 +412,43 @@ public class PiercingBloodProjectileEntity extends Projectile {
         this.chargeDamageMultiplier = Math.max(1.0F, chargeDamageMultiplier);
     }
 
+    public void setMaxHeldTicks(int maxHeldTicks) {
+        this.maxHeldTicks = Math.max(10, maxHeldTicks);
+    }
+
+    public void setHeldSpeed(float heldSpeed) {
+        this.heldSpeed = Math.max(2.5D, Math.min(3.5D, heldSpeed));
+    }
+
+    public void setHitRadius(float hitRadius) {
+        this.hitRadius = Math.max(0.55D, Math.min(0.85D, hitRadius));
+    }
+
+    public int getMaxHeldTicks() {
+        return this.maxHeldTicks;
+    }
+
+    public boolean isHeldPhase() {
+        return this.held;
+    }
+
+    @Override
+    public void remove(RemovalReason reason) {
+        if (this.level() instanceof ServerLevel) {
+            notifyDied();
+        }
+        super.remove(reason);
+    }
+
     private void notifyDied() {
+        if (this.cleanupNotified) {
+            return;
+        }
+        this.cleanupNotified = true;
+        if (this.ownerUuid != null) {
+            PiercingBloodTechniqueHandler.onProjectileDied(this.ownerUuid);
+            return;
+        }
         if (this.getOwner() instanceof ServerPlayer player) {
             PiercingBloodTechniqueHandler.onProjectileDied(player.getUUID());
         }

@@ -1,14 +1,15 @@
 package com.pop.jjk;
 
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -20,38 +21,37 @@ public final class PiercingBloodTechniqueHandler {
     private static final int COOLDOWN_TICKS = 25;
     private static final int ENERGY_COST = 80;
     private static final int MIN_CHARGE_TICKS = 10;
-    private static final int MAX_CHARGE_TICKS = 20 * 6;
+    private static final int MAX_CHARGE_TICKS = 200;
+    private static final int BEAM_ACTIVE_TICKS = 200;
     private static final DustParticleOptions CHARGE_DUST = new DustParticleOptions(0xB80020, 0.35F);
+    private static final DustParticleOptions MAX_CHARGE_DUST = new DustParticleOptions(0xFF2020, 0.75F);
 
     private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> CHARGE_STARTS = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> ACTIVE_PROJECTILES = new ConcurrentHashMap<>();
-    private static final Set<UUID> AUTO_RELEASE_LOCK = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> SUPPRESSED_COOLDOWN_REMOVALS = ConcurrentHashMap.newKeySet();
 
     private PiercingBloodTechniqueHandler() {
     }
 
     public static void activate(ServerPlayer player) {
-        if (!player.isAlive()) {
-            return;
-        }
-        if (!isTechniqueAvailable(player)) {
+        if (!player.isAlive() || !isTechniqueAvailable(player)) {
+            debug(player, "activate ignored: alive=%s available=%s", player.isAlive(), isTechniqueAvailable(player));
             return;
         }
 
         ServerLevel level = (ServerLevel) player.level();
         UUID playerId = player.getUUID();
         cleanupStaleProjectile(player, level);
-        if (findActiveProjectile(player, level) != null) {
-            return;
+        PiercingBloodProjectileEntity activeProjectile = findActiveProjectile(player, level);
+        if (activeProjectile != null) {
+            debug(player, "activate replacing activeProjectile id=%d held=%s tick=%d", activeProjectile.getId(), activeProjectile.isHeldPhase(), activeProjectile.tickCount);
+            discardForRecast(player, level, activeProjectile);
         }
-
-        // Si no queda beam activo, cualquier estado residual de carga ya no debe bloquear usos futuros.
-        CHARGE_STARTS.remove(playerId);
-        AUTO_RELEASE_LOCK.remove(playerId);
 
         int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
+            debug(player, "activate blocked: cooldown=%d", cooldown);
             player.displayClientMessage(
                 Component.translatable("message.jjk.piercing_blood_cooldown", formatSeconds(cooldown)),
                 true
@@ -59,14 +59,12 @@ public final class PiercingBloodTechniqueHandler {
             return;
         }
 
-        if (CHARGE_STARTS.putIfAbsent(playerId, player.tickCount) != null) {
-            return;
-        }
-
+        CHARGE_STARTS.put(playerId, player.tickCount);
+        debug(player, "activate ok: startTick=%d", player.tickCount);
         spawnChargeParticles(level, player, 1);
     }
 
-    public static void tick() {
+    public static void tick(MinecraftServer server) {
         for (UUID playerId : new ArrayList<>(COOLDOWNS.keySet())) {
             if (BlueTechniqueHandler.hasNoCooldown(playerId)) {
                 COOLDOWNS.remove(playerId);
@@ -85,13 +83,34 @@ public final class PiercingBloodTechniqueHandler {
                 COOLDOWNS.put(playerId, next);
             }
         }
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            UUID playerId = player.getUUID();
+            ServerLevel level = (ServerLevel) player.level();
+            cleanupStaleProjectile(player, level);
+
+            PiercingBloodProjectileEntity projectile = findActiveProjectile(player, level);
+            if (projectile == null) {
+                ACTIVE_PROJECTILES.remove(playerId);
+            } else if (!projectile.isHeldPhase() && projectile.tickCount > (projectile.getMaxHeldTicks() + 15)) {
+                debug(player, "tick forced discard: projectile id=%d tick=%d maxHeld=%d", projectile.getId(), projectile.tickCount, projectile.getMaxHeldTicks());
+                projectile.discard();
+                ACTIVE_PROJECTILES.remove(playerId);
+            }
+
+            Integer startTick = CHARGE_STARTS.get(playerId);
+            if (startTick != null && (player.tickCount - startTick) > (MAX_CHARGE_TICKS + 40)) {
+                debug(player, "tick cleared stale charge: startTick=%d currentTick=%d", startTick, player.tickCount);
+                CHARGE_STARTS.remove(playerId);
+            }
+        }
     }
 
     public static void clearActive() {
         COOLDOWNS.clear();
         CHARGE_STARTS.clear();
         ACTIVE_PROJECTILES.clear();
-        AUTO_RELEASE_LOCK.clear();
+        SUPPRESSED_COOLDOWN_REMOVALS.clear();
     }
 
     public static void onHold(ServerPlayer player, boolean holding) {
@@ -100,77 +119,77 @@ public final class PiercingBloodTechniqueHandler {
         }
         if (!isTechniqueAvailable(player)) {
             CHARGE_STARTS.remove(player.getUUID());
-            AUTO_RELEASE_LOCK.remove(player.getUUID());
+            debug(player, "onHold ignored: technique unavailable");
             return;
         }
 
         ServerLevel level = (ServerLevel) player.level();
-        cleanupStaleProjectile(player, level);
         UUID playerId = player.getUUID();
+        cleanupStaleProjectile(player, level);
+        debug(
+            player,
+            "onHold %s: chargeStart=%s activeProjectile=%s cooldown=%d tick=%d",
+            holding,
+            CHARGE_STARTS.get(playerId),
+            ACTIVE_PROJECTILES.get(playerId),
+            COOLDOWNS.getOrDefault(playerId, 0),
+            player.tickCount
+        );
 
         if (holding) {
-            if (AUTO_RELEASE_LOCK.contains(playerId)) {
+            int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+            if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
+                debug(player, "onHold(true) blocked by cooldown=%d", cooldown);
                 return;
+            }
+            PiercingBloodProjectileEntity activeProjectile = findActiveProjectile(player, level);
+            if (activeProjectile != null) {
+                debug(player, "onHold(true) replacing activeProjectile id=%d held=%s tick=%d", activeProjectile.getId(), activeProjectile.isHeldPhase(), activeProjectile.tickCount);
+                discardForRecast(player, level, activeProjectile);
             }
 
             int startTick = CHARGE_STARTS.computeIfAbsent(playerId, ignored -> player.tickCount);
             int chargeTicks = getChargeTicks(player, startTick);
-            PiercingBloodProjectileEntity projectile = findActiveProjectile(player, level);
-
-            if (projectile == null) {
-                spawnChargeParticles(level, player, chargeTicks);
-                if (chargeTicks >= MIN_CHARGE_TICKS) {
-                    projectile = trySpawnHeldProjectile(player, level, chargeTicks);
-                    if (projectile != null) {
-                        projectile.setHeld(true);
-                    }
-                }
-                return;
-            }
-
-            projectile.setHeld(true);
-            projectile.setChargeDamageMultiplier(getDamageMultiplier(chargeTicks));
+            debug(player, "onHold(true) charging: startTick=%d chargeTicks=%d", startTick, chargeTicks);
+            spawnChargeParticles(level, player, chargeTicks);
+            playChargeHeartbeat(level, player, chargeTicks);
 
             if (chargeTicks >= MAX_CHARGE_TICKS) {
-                projectile.setHeld(false);
                 CHARGE_STARTS.remove(playerId);
-                AUTO_RELEASE_LOCK.add(playerId);
+                debug(player, "onHold(true) reached max charge -> spawnReleasedBeam chargeTicks=%d", chargeTicks);
+                spawnReleasedBeam(player, level, chargeTicks);
             }
             return;
         }
-
-        AUTO_RELEASE_LOCK.remove(playerId);
 
         Integer startTick = CHARGE_STARTS.remove(playerId);
-        PiercingBloodProjectileEntity projectile = findActiveProjectile(player, level);
-        if (startTick == null && projectile == null) {
+        if (startTick == null) {
+            debug(player, "onHold(false) ignored: no startTick");
             return;
         }
 
-        if (projectile == null) {
-            int chargeTicks = getChargeTicks(player, startTick);
-            if (chargeTicks < MIN_CHARGE_TICKS) {
-                return;
-            }
-
-            projectile = trySpawnHeldProjectile(player, level, chargeTicks);
-            if (projectile == null) {
-                return;
-            }
+        int chargeTicks = getChargeTicks(player, startTick);
+        if (chargeTicks < MIN_CHARGE_TICKS) {
+            debug(player, "onHold(false) cancelled: chargeTicks=%d < min=%d", chargeTicks, MIN_CHARGE_TICKS);
+            return;
         }
 
-        projectile.setHeld(false);
+        debug(player, "onHold(false) releasing beam: chargeTicks=%d", chargeTicks);
+        spawnReleasedBeam(player, level, chargeTicks);
     }
 
     public static void onProjectileDied(UUID ownerUUID) {
         ACTIVE_PROJECTILES.remove(ownerUUID);
-        CHARGE_STARTS.remove(ownerUUID);
-        AUTO_RELEASE_LOCK.remove(ownerUUID);
+        if (SUPPRESSED_COOLDOWN_REMOVALS.remove(ownerUUID)) {
+            System.out.println("[PB_DEBUG] onProjectileDied owner=" + ownerUUID + " cooldown suppressed");
+            return;
+        }
         if (!BlueTechniqueHandler.hasNoCooldown(ownerUUID)) {
-            COOLDOWNS.put(ownerUUID, COOLDOWN_TICKS);
+            COOLDOWNS.put(ownerUUID, COOLDOWNS.getOrDefault(ownerUUID, COOLDOWN_TICKS));
         } else {
             COOLDOWNS.remove(ownerUUID);
         }
+        System.out.println("[PB_DEBUG] onProjectileDied owner=" + ownerUUID + " cooldown=" + COOLDOWNS.getOrDefault(ownerUUID, 0));
     }
 
     public static void clearCooldown(ServerPlayer player) {
@@ -185,6 +204,7 @@ public final class PiercingBloodTechniqueHandler {
 
         net.minecraft.world.entity.Entity entity = level.getEntity(projectileId);
         if (!(entity instanceof PiercingBloodProjectileEntity projectile) || !projectile.isAlive()) {
+            debug(player, "cleanupStaleProjectile removed stale id=%d entity=%s", projectileId, entity == null ? "null" : entity.getClass().getSimpleName());
             ACTIVE_PROJECTILES.remove(player.getUUID());
         }
     }
@@ -222,30 +242,61 @@ public final class PiercingBloodTechniqueHandler {
     private static void spawnChargeParticles(ServerLevel level, ServerPlayer player, int chargeTicks) {
         Vec3 dir = player.getLookAngle().normalize();
         Vec3 origin = player.getEyePosition().add(dir.scale(0.55D));
-        float buildup = Math.min(chargeTicks, MIN_CHARGE_TICKS) / (float) MIN_CHARGE_TICKS;
-        double radius = 0.05D + (buildup * 0.11D);
-        int count = 4 + Math.round(buildup * 6.0F);
+        float buildup = Math.min(chargeTicks, MAX_CHARGE_TICKS) / (float) MAX_CHARGE_TICKS;
+        double radius = 0.05D + (buildup * 0.18D);
+        int count = 4 + Math.round(buildup * 10.0F);
         level.sendParticles(CHARGE_DUST, origin.x, origin.y, origin.z, count, radius, radius, radius, 0.01D);
     }
 
-    private static PiercingBloodProjectileEntity trySpawnHeldProjectile(ServerPlayer player, ServerLevel level, int chargeTicks) {
+    private static void playChargeHeartbeat(ServerLevel level, ServerPlayer player, int chargeTicks) {
+        if ((chargeTicks % 20) != 0) {
+            return;
+        }
+
+        float chargeFactor = chargeTicks / (float) MAX_CHARGE_TICKS;
+        float pitch = 0.6F + (Math.max(0.0F, Math.min(1.0F, chargeFactor)) * 0.8F);
+        level.playSound(null, player.blockPosition(), SoundEvents.WARDEN_HEARTBEAT, SoundSource.PLAYERS, 0.5F, pitch);
+    }
+
+    private static void playMaxChargeFeedback(ServerLevel level, ServerPlayer player) {
+        Vec3 dir = player.getLookAngle().normalize();
+        Vec3 origin = player.getEyePosition().add(dir.scale(0.55D));
+        level.playSound(null, player.blockPosition(), SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, 0.8F, 1.0F);
+        level.sendParticles(MAX_CHARGE_DUST, origin.x, origin.y, origin.z, 20, 0.18D, 0.18D, 0.18D, 0.05D);
+        level.sendParticles(JJKParticles.BLOOD_CORE, origin.x, origin.y, origin.z, 8, 0.10D, 0.10D, 0.10D, 0.0D);
+    }
+
+    private static void spawnReleasedBeam(ServerPlayer player, ServerLevel level, int chargeTicks) {
+        PiercingBloodProjectileEntity activeProjectile = findActiveProjectile(player, level);
+        if (activeProjectile != null) {
+            debug(player, "spawnReleasedBeam replacing activeProjectile id=%d held=%s tick=%d", activeProjectile.getId(), activeProjectile.isHeldPhase(), activeProjectile.tickCount);
+            discardForRecast(player, level, activeProjectile);
+        }
+
         int cooldown = COOLDOWNS.getOrDefault(player.getUUID(), 0);
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(player.getUUID())) {
+            debug(player, "spawnReleasedBeam blocked: cooldown=%d", cooldown);
             player.displayClientMessage(
                 Component.translatable("message.jjk.piercing_blood_cooldown", formatSeconds(cooldown)),
                 true
             );
-            return null;
+            return;
         }
 
         if (!CursedEnergyManager.consume(player, ENERGY_COST)) {
+            debug(player, "spawnReleasedBeam blocked: not enough energy");
             player.displayClientMessage(Component.translatable("message.jjk.not_enough_energy"), true);
-            return null;
+            return;
         }
 
         Vec3 dir = player.getLookAngle().normalize();
         Vec3 origin = player.getEyePosition().add(dir.scale(0.55D));
         float damageMultiplier = getDamageMultiplier(chargeTicks);
+        float chargeFactor = Math.max(0.0F, Math.min(1.0F, chargeTicks / (float) MAX_CHARGE_TICKS));
+
+        if (chargeTicks >= MAX_CHARGE_TICKS) {
+            playMaxChargeFeedback(level, player);
+        }
 
         level.playSound(null, player.blockPosition(), SoundEvents.ARROW_SHOOT, SoundSource.PLAYERS, 1.1F, 1.90F);
         level.playSound(null, player.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP, SoundSource.PLAYERS, 0.7F, 1.80F);
@@ -254,9 +305,13 @@ public final class PiercingBloodTechniqueHandler {
 
         PiercingBloodProjectileEntity projectile = new PiercingBloodProjectileEntity(level, player);
         projectile.setChargeDamageMultiplier(damageMultiplier);
+        projectile.setMaxHeldTicks(BEAM_ACTIVE_TICKS);
+        projectile.setHeldSpeed(2.5F + chargeFactor);
+        projectile.setHitRadius(0.55F + (chargeFactor * 0.30F));
+        projectile.setHeld(true);
         level.addFreshEntity(projectile);
         ACTIVE_PROJECTILES.put(player.getUUID(), projectile.getId());
-        return projectile;
+        debug(player, "spawnReleasedBeam ok: projectile id=%d chargeTicks=%d damageMult=%.2f chargeFactor=%.2f", projectile.getId(), chargeTicks, damageMultiplier, chargeFactor);
     }
 
     private static float getDamageMultiplier(int chargeTicks) {
@@ -266,5 +321,18 @@ public final class PiercingBloodTechniqueHandler {
 
     private static String formatSeconds(int ticks) {
         return String.format(Locale.ROOT, "%.1f", ticks / 20.0D);
+    }
+
+    private static void discardForRecast(ServerPlayer player, ServerLevel level, PiercingBloodProjectileEntity projectile) {
+        UUID playerId = player.getUUID();
+        SUPPRESSED_COOLDOWN_REMOVALS.add(playerId);
+        ACTIVE_PROJECTILES.remove(playerId);
+        projectile.discard();
+        cleanupStaleProjectile(player, level);
+    }
+
+    private static void debug(ServerPlayer player, String message, Object... args) {
+        String prefix = player == null ? "unknown" : player.getName().getString();
+        System.out.println("[PB_DEBUG][" + prefix + "] " + String.format(Locale.ROOT, message, args));
     }
 }
