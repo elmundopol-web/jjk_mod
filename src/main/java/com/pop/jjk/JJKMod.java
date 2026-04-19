@@ -118,8 +118,6 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(InfiniteDomainUsePayload.TYPE, InfiniteDomainUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(MalevolentShrineUsePayload.TYPE, MalevolentShrineUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(DivergingFistUsePayload.TYPE, DivergingFistUsePayload.STREAM_CODEC);
-        PayloadTypeRegistry.playC2S().register(PiercingBloodUsePayload.TYPE, PiercingBloodUsePayload.STREAM_CODEC);
-        PayloadTypeRegistry.playC2S().register(PiercingBloodHoldPayload.TYPE, PiercingBloodHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(FlowingRedScaleUsePayload.TYPE, FlowingRedScaleUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(SupernovaUsePayload.TYPE, SupernovaUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(SupernovaHoldPayload.TYPE, SupernovaHoldPayload.STREAM_CODEC);
@@ -161,12 +159,6 @@ public class JJKMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(DivergingFistUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> DivergingFistTechniqueHandler.activate(context.player()))
         );
-        ServerPlayNetworking.registerGlobalReceiver(PiercingBloodUsePayload.TYPE, (payload, context) ->
-            context.server().execute(() -> PiercingBloodTechniqueHandler.activate(context.player()))
-        );
-        ServerPlayNetworking.registerGlobalReceiver(PiercingBloodHoldPayload.TYPE, (payload, context) ->
-            context.server().execute(() -> PiercingBloodTechniqueHandler.onHold(context.player(), payload.holding()))
-        );
         ServerPlayNetworking.registerGlobalReceiver(FlowingRedScaleUsePayload.TYPE, (payload, context) ->
             context.server().execute(() -> FlowingRedScaleTechniqueHandler.activate(context.player()))
         );
@@ -203,11 +195,11 @@ public class JJKMod implements ModInitializer {
         JJKCommands.register();
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(InfinityTechniqueHandler::allowDamage);
         ServerLivingEntityEvents.AFTER_DAMAGE.register(InfiniteDomainTechniqueHandler::afterDamage);
+        ServerTickEvents.END_SERVER_TICK.register(TechniqueCooldownManager::tick);
         ServerTickEvents.END_SERVER_TICK.register(server -> BlueTechniqueHandler.tickActive(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> InfiniteDomainTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> MalevolentShrineTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> DivergingFistTechniqueHandler.tick());
-        ServerTickEvents.END_SERVER_TICK.register(PiercingBloodTechniqueHandler::tick);
         ServerTickEvents.END_SERVER_TICK.register(server -> FlowingRedScaleTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> SupernovaTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> DismantleTechniqueHandler.tick());
@@ -220,7 +212,6 @@ public class JJKMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfiniteDomainTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> MalevolentShrineTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DivergingFistTechniqueHandler.clearActive());
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> PiercingBloodTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FlowingRedScaleTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> SupernovaTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DismantleTechniqueHandler.clearActive());
@@ -229,6 +220,8 @@ public class JJKMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaProjectileEntity.clearPersistentFireZones());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> TechniqueCooldownManager.clearAll());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> JJKFxBudget.clear());
 
         JJKParticles.init();
         JJKSounds.init();

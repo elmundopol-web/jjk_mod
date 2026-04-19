@@ -16,7 +16,7 @@ public final class PurpleTechniqueHandler {
 
     public static void activate(ServerPlayer player) {
         UUID playerId = player.getUUID();
-        int cooldown = BlueTechniqueHandler.getCooldown(playerId);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
 
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
             int remainingSeconds = (cooldown + 19) / 20;
@@ -32,8 +32,7 @@ public final class PurpleTechniqueHandler {
         ServerLevel level = (ServerLevel) player.level();
 
         if (!BlueTechniqueHandler.hasNoCooldown(playerId)) {
-            BlueTechniqueHandler.setCooldown(playerId, PURPLE_COOLDOWN_TICKS);
-            BlueTechniqueHandler.syncCooldownToClient(player, PURPLE_COOLDOWN_TICKS, PURPLE_COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player, PURPLE_COOLDOWN_TICKS, PURPLE_COOLDOWN_TICKS);
         }
 
         PurpleProjectileEntity purpleProjectile = new PurpleProjectileEntity(level, player);

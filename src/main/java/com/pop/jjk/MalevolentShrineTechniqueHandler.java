@@ -45,8 +45,6 @@ public final class MalevolentShrineTechniqueHandler {
     private static final int GROUND_SCYTHE_POINTS = 48;
 
     private static final Map<UUID, ActiveShrine> ACTIVE_SHRINES = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
-
     private MalevolentShrineTechniqueHandler() {
     }
 
@@ -66,7 +64,7 @@ public final class MalevolentShrineTechniqueHandler {
             return;
         }
 
-        int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
         if (cooldown > 0 && !noCooldown) {
             player.displayClientMessage(
                 Component.translatable("message.jjk.malevolent_shrine_cooldown", formatSeconds(cooldown)),
@@ -85,23 +83,23 @@ public final class MalevolentShrineTechniqueHandler {
         ACTIVE_SHRINES.put(playerId, shrine);
 
         if (!noCooldown) {
-            COOLDOWNS.put(playerId, DOMAIN_COOLDOWN_TICKS);
-            syncCooldownToClient(player, DOMAIN_COOLDOWN_TICKS, DOMAIN_COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player, DOMAIN_COOLDOWN_TICKS, DOMAIN_COOLDOWN_TICKS);
         } else {
-            COOLDOWNS.remove(playerId);
-            syncCooldownToClient(player, 0, 0);
+            TechniqueCooldownManager.clear(player);
         }
 
-        level.playSound(null, player.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.9F, 0.85F);
-        level.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 1.1F, 0.65F);
+        if (JJKFxBudget.allowSound(level)) {
+            level.playSound(null, player.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.PLAYERS, 0.9F, 0.85F);
+        }
+        if (JJKFxBudget.allowSound(level)) {
+            level.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 1.1F, 0.65F);
+        }
         spawnActivationParticles(shrine);
         broadcastShrineState(shrine, true);
         player.displayClientMessage(Component.translatable("message.jjk.malevolent_shrine_cast"), true);
     }
 
     public static void tick(MinecraftServer server) {
-        tickCooldowns(server);
-
         Set<UUID> expired = new java.util.HashSet<>();
         for (Map.Entry<UUID, ActiveShrine> entry : new ArrayList<>(ACTIVE_SHRINES.entrySet())) {
             UUID ownerId = entry.getKey();
@@ -135,11 +133,11 @@ public final class MalevolentShrineTechniqueHandler {
                 playSlashAmbience(shrine);
             }
 
-            if ((shrine.ageTicks % 30) == 0) {
+            if ((shrine.ageTicks % 30) == 0 && JJKFxBudget.allowSound(shrine.level)) {
                 shrine.level.playSound(null, owner.blockPosition(), SoundEvents.WITHER_AMBIENT, SoundSource.PLAYERS, 0.4F, 0.7F + (shrine.level.random.nextFloat() * 0.2F));
             }
 
-            if ((shrine.ageTicks % 60) == 0) {
+            if ((shrine.ageTicks % 60) == 0 && JJKFxBudget.allowSound(shrine.level)) {
                 shrine.level.playSound(null, owner.blockPosition(), SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.3F, 1.4F);
             }
 
@@ -156,12 +154,10 @@ public final class MalevolentShrineTechniqueHandler {
 
     public static void clearAll() {
         ACTIVE_SHRINES.clear();
-        COOLDOWNS.clear();
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
-        syncCooldownToClient(player, 0, 0);
+        TechniqueCooldownManager.clear(player);
     }
 
     public static void syncActiveDomainsToPlayer(ServerPlayer player) {
@@ -210,6 +206,9 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void spawnActivationParticles(ActiveShrine shrine) {
+        if (!JJKFxBudget.allowParticles(shrine.level, 140)) {
+            return;
+        }
         double[] rings = new double[] {8.0D, 15.0D, DOMAIN_RADIUS};
         for (double ringRadius : rings) {
             int points = Math.max(20, Mth.ceil((float) (ringRadius * 2.4D)));
@@ -230,6 +229,9 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void playSlashAmbience(ActiveShrine shrine) {
+        if (!JJKFxBudget.allowSound(shrine.level)) {
+            return;
+        }
         double radius = DOMAIN_RADIUS * Math.sqrt(shrine.level.random.nextDouble());
         double angle = shrine.level.random.nextDouble() * Math.PI * 2.0D;
         double x = shrine.center.x + Math.cos(angle) * radius;
@@ -354,12 +356,17 @@ public final class MalevolentShrineTechniqueHandler {
                         continue;
                     }
 
+                    if (!JJKFxBudget.allowBlockOperation(shrine.level)) {
+                        return destroyed;
+                    }
                     if (shrine.level.destroyBlock(cursor, false, owner)) {
                         Vec3 center = cursor.getCenter();
-                        shrine.level.sendParticles(ParticleTypes.CRIT, center.x, center.y, center.z, 2, vx * 0.55D, vy * 0.35D, vz * 0.55D, 0.0D);
-                        shrine.level.sendParticles(SHRINE_RED_DUST, center.x, center.y, center.z, 2, vx * 0.45D, vy * 0.25D, vz * 0.45D, 0.0D);
-                        shrine.level.sendParticles(SHRINE_DARK_RED_DUST, center.x, center.y, center.z, 1, vx * 0.35D, vy * 0.15D, vz * 0.35D, 0.0D);
-                        shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, center.x, center.y, center.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                        if (JJKFxBudget.allowParticles(shrine.level, 6)) {
+                            shrine.level.sendParticles(ParticleTypes.CRIT, center.x, center.y, center.z, 2, vx * 0.55D, vy * 0.35D, vz * 0.55D, 0.0D);
+                            shrine.level.sendParticles(SHRINE_RED_DUST, center.x, center.y, center.z, 2, vx * 0.45D, vy * 0.25D, vz * 0.45D, 0.0D);
+                            shrine.level.sendParticles(SHRINE_DARK_RED_DUST, center.x, center.y, center.z, 1, vx * 0.35D, vy * 0.15D, vz * 0.35D, 0.0D);
+                            shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, center.x, center.y, center.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                        }
                         destroyed++;
                     }
                 }
@@ -419,12 +426,17 @@ public final class MalevolentShrineTechniqueHandler {
                         continue;
                     }
 
+                    if (!JJKFxBudget.allowBlockOperation(shrine.level)) {
+                        return destroyed;
+                    }
                     if (shrine.level.destroyBlock(cursor, false, owner)) {
                         Vec3 center = cursor.getCenter();
-                        shrine.level.sendParticles(ParticleTypes.CRIT, center.x, center.y, center.z, 2, vx, 0.06D, vz, 0.0D);
-                        shrine.level.sendParticles(SHRINE_RED_DUST, center.x, center.y, center.z, 2, vx * 0.8D, 0.04D, vz * 0.8D, 0.0D);
-                        shrine.level.sendParticles(SHRINE_BLACK_DUST, center.x, center.y, center.z, 1, vx * 0.55D, 0.02D, vz * 0.55D, 0.0D);
-                        shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, center.x, center.y, center.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                        if (JJKFxBudget.allowParticles(shrine.level, 6)) {
+                            shrine.level.sendParticles(ParticleTypes.CRIT, center.x, center.y, center.z, 2, vx, 0.06D, vz, 0.0D);
+                            shrine.level.sendParticles(SHRINE_RED_DUST, center.x, center.y, center.z, 2, vx * 0.8D, 0.04D, vz * 0.8D, 0.0D);
+                            shrine.level.sendParticles(SHRINE_BLACK_DUST, center.x, center.y, center.z, 1, vx * 0.55D, 0.02D, vz * 0.55D, 0.0D);
+                            shrine.level.sendParticles(ParticleTypes.SWEEP_ATTACK, center.x, center.y, center.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                        }
                         destroyed++;
                     }
                 }
@@ -435,6 +447,9 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void spawnEntitySlashImpact(ActiveShrine shrine, LivingEntity entity) {
+        if (!JJKFxBudget.allowParticles(shrine.level, 14)) {
+            return;
+        }
         Vec3 center = getEntityCenter(entity);
         Vec3 slashDir = center.subtract(shrine.center);
         if (slashDir.lengthSqr() < 0.0001D) {
@@ -451,36 +466,15 @@ public final class MalevolentShrineTechniqueHandler {
     }
 
     private static void spawnEndingCollapseParticles(ActiveShrine shrine) {
+        if (!JJKFxBudget.allowParticles(shrine.level, 200)) {
+            return;
+        }
         shrine.level.sendParticles(SHRINE_BLACK_DUST, shrine.center.x, shrine.center.y + 2.0D, shrine.center.z, 80, 6.0D, 2.0D, 6.0D, 0.03D);
         shrine.level.sendParticles(SHRINE_RED_DUST, shrine.center.x, shrine.center.y + 1.2D, shrine.center.z, 70, 5.0D, 1.6D, 5.0D, 0.02D);
         shrine.level.sendParticles(ParticleTypes.LARGE_SMOKE, shrine.center.x, shrine.center.y + 0.8D, shrine.center.z, 50, 6.5D, 1.5D, 6.5D, 0.04D);
-        shrine.level.playSound(null, shrine.center.x, shrine.center.y, shrine.center.z, SoundEvents.WITHER_DEATH, SoundSource.PLAYERS, 0.35F, 1.35F);
-    }
-
-    private static void tickCooldowns(MinecraftServer server) {
-        Set<UUID> expired = new java.util.HashSet<>();
-        for (UUID playerId : new ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-
-            int next = current - 1;
-            if (next <= 0) {
-                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
-                if (player != null) {
-                    syncCooldownToClient(player, 0, 0);
-                }
-                expired.add(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
+        if (JJKFxBudget.allowSound(shrine.level)) {
+            shrine.level.playSound(null, shrine.center.x, shrine.center.y, shrine.center.z, SoundEvents.WITHER_DEATH, SoundSource.PLAYERS, 0.35F, 1.35F);
         }
-        expired.forEach(COOLDOWNS::remove);
-    }
-
-    private static void syncCooldownToClient(ServerPlayer player, int remaining, int total) {
-        ServerPlayNetworking.send(player, new CooldownSyncPayload(remaining, total));
     }
 
     private static void broadcastShrineState(ActiveShrine shrine, boolean active) {

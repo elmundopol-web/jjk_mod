@@ -1,8 +1,6 @@
 package com.pop.jjk;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -26,8 +24,7 @@ public final class FlowingRedScaleTechniqueHandler {
 
     private static final DustParticleOptions BLOOD_DUST = new DustParticleOptions(0xCC1010, 0.9F);
 
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
-    private static final Map<UUID, ActiveBuff> ACTIVE = new ConcurrentHashMap<>();
+    private static final java.util.Map<UUID, ActiveBuff> ACTIVE = new java.util.concurrent.ConcurrentHashMap<>();
 
     private FlowingRedScaleTechniqueHandler() {
     }
@@ -36,7 +33,7 @@ public final class FlowingRedScaleTechniqueHandler {
         if (!player.isAlive()) return;
         if (!isTechniqueAvailable(player)) return;
 
-        int cd = COOLDOWNS.getOrDefault(player.getUUID(), 0);
+        int cd = TechniqueCooldownManager.getRemaining(player.getUUID());
         if (cd > 0 && !BlueTechniqueHandler.hasNoCooldown(player.getUUID())) {
             player.displayClientMessage(
                 Component.translatable("message.jjk.flowing_red_scale_cooldown", formatSeconds(cd)), true);
@@ -55,27 +52,14 @@ public final class FlowingRedScaleTechniqueHandler {
         ACTIVE.put(player.getUUID(), new ActiveBuff(lvl, EFFECT_DURATION));
 
         if (!BlueTechniqueHandler.hasNoCooldown(player.getUUID())) {
-            COOLDOWNS.put(player.getUUID(), COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player.getUUID(), COOLDOWN_TICKS);
         } else {
-            COOLDOWNS.remove(player.getUUID());
+            TechniqueCooldownManager.clear(player.getUUID());
         }
         player.displayClientMessage(Component.translatable("message.jjk.flowing_red_scale_cast"), true);
     }
 
     public static void tick() {
-        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int next = current - 1;
-            if (next <= 0) {
-                COOLDOWNS.remove(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
-
         for (UUID playerId : new java.util.ArrayList<>(ACTIVE.keySet())) {
             ActiveBuff buff = ACTIVE.get(playerId);
             if (buff == null) {
@@ -96,7 +80,6 @@ public final class FlowingRedScaleTechniqueHandler {
     }
 
     public static void clearActive() {
-        COOLDOWNS.clear();
         ACTIVE.clear();
     }
 
@@ -142,6 +125,6 @@ public final class FlowingRedScaleTechniqueHandler {
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
+        TechniqueCooldownManager.clear(player);
     }
 }

@@ -1,9 +1,7 @@
 package com.pop.jjk;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 
 import net.minecraft.core.particles.DustParticleOptions;
@@ -22,10 +20,9 @@ public final class SupernovaTechniqueHandler {
 
     private static final DustParticleOptions BLOOD_DUST_SMALL = new DustParticleOptions(0xFF7070, 0.7F);
 
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
-    private static final Map<UUID, HoldState> HOLDS = new ConcurrentHashMap<>();
-    private static final Map<UUID, List<Integer>> ORBS = new ConcurrentHashMap<>();
-    private static final Map<UUID, Double> ORBIT_SPEEDS = new ConcurrentHashMap<>();
+    private static final java.util.Map<UUID, HoldState> HOLDS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<UUID, List<Integer>> ORBS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<UUID, Double> ORBIT_SPEEDS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private SupernovaTechniqueHandler() {}
 
@@ -39,7 +36,7 @@ public final class SupernovaTechniqueHandler {
         if (!isTechniqueAvailable(player)) return;
 
         UUID id = player.getUUID();
-        int cd = COOLDOWNS.getOrDefault(id, 0);
+        int cd = TechniqueCooldownManager.getRemaining(id);
         if (holding) {
             if (cd > 0 && !BlueTechniqueHandler.hasNoCooldown(id)) {
                 player.displayClientMessage(Component.translatable("message.jjk.supernova_cooldown", formatSeconds(cd)), true);
@@ -54,30 +51,17 @@ public final class SupernovaTechniqueHandler {
             if (state != null) {
                 launchAll(player);
                 if (!BlueTechniqueHandler.hasNoCooldown(id)) {
-                    COOLDOWNS.put(id, COOLDOWN_TICKS);
+                    TechniqueCooldownManager.set(id, COOLDOWN_TICKS);
                 } else {
-                    COOLDOWNS.remove(id);
+                    TechniqueCooldownManager.clear(id);
                 }
             }
         }
     }
 
     public static void tick() {
-        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int next = current - 1;
-            if (next <= 0) {
-                COOLDOWNS.remove(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
-
         // Tick holds: spawn orbs, increase orbit speed, ring FX
-        for (Map.Entry<UUID, HoldState> entry : new HashSet<>(HOLDS.entrySet())) {
+        for (java.util.Map.Entry<UUID, HoldState> entry : new HashSet<>(HOLDS.entrySet())) {
             UUID pid = entry.getKey();
             HoldState state = entry.getValue();
             state.ticks++;
@@ -124,7 +108,6 @@ public final class SupernovaTechniqueHandler {
     }
 
     public static void clearActive() {
-        COOLDOWNS.clear();
         HOLDS.clear();
         ORBS.clear();
         ORBIT_SPEEDS.clear();
@@ -186,6 +169,6 @@ public final class SupernovaTechniqueHandler {
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
+        TechniqueCooldownManager.clear(player);
     }
 }

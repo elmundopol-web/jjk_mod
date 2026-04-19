@@ -1,9 +1,5 @@
 package com.pop.jjk;
 
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
@@ -23,8 +19,6 @@ public final class CleaveTechniqueHandler {
     private static final double HALF_ANGLE_DEG = 30.0; // 60° total
     private static final double COS_THRESHOLD = Math.cos(Math.toRadians(HALF_ANGLE_DEG));
 
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
-
     private CleaveTechniqueHandler() {
     }
 
@@ -36,7 +30,7 @@ public final class CleaveTechniqueHandler {
             return;
         }
 
-        int cd = COOLDOWNS.getOrDefault(player.getUUID(), 0);
+        int cd = TechniqueCooldownManager.getRemaining(player.getUUID());
         if (cd > 0) {
             return;
         }
@@ -77,27 +71,13 @@ public final class CleaveTechniqueHandler {
         level.playSound(null, player.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP, SoundSource.PLAYERS, 1.0F, 1.0F);
         level.playSound(null, player.blockPosition(), SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 0.9F, 1.0F);
 
-        COOLDOWNS.put(player.getUUID(), COOLDOWN_TICKS);
+        TechniqueCooldownManager.set(player.getUUID(), COOLDOWN_TICKS);
     }
 
     public static void tick() {
-        if (COOLDOWNS.isEmpty()) return;
-        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int next = current - 1;
-            if (next <= 0) {
-                COOLDOWNS.remove(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
     }
 
     public static void clearActive() {
-        COOLDOWNS.clear();
     }
 
     private static boolean isTechniqueAvailableForPlayer(ServerPlayer player) {

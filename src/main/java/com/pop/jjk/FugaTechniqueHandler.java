@@ -32,7 +32,7 @@ public final class FugaTechniqueHandler {
         }
 
         UUID playerId = player.getUUID();
-        int cooldown = BlueTechniqueHandler.getCooldown(playerId);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
         if (holding) {
             if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
                 player.displayClientMessage(Component.translatable("message.jjk.fuga_cooldown", formatSeconds(cooldown)), true);
@@ -48,7 +48,9 @@ public final class FugaTechniqueHandler {
                 HOLDS.put(playerId, new HoldState(level, chargeEntity));
 
                 Vec3 palm = palmAnchor(player);
-                level.playSound(null, palm.x, palm.y, palm.z, SoundEvents.FLINTANDSTEEL_USE, SoundSource.PLAYERS, 0.8F, 1.9F);
+                if (JJKFxBudget.allowSound(level)) {
+                    level.playSound(null, palm.x, palm.y, palm.z, SoundEvents.FLINTANDSTEEL_USE, SoundSource.PLAYERS, 0.8F, 1.9F);
+                }
                 player.displayClientMessage(Component.translatable("message.jjk.fuga_open"), true);
             }
             return;
@@ -85,21 +87,25 @@ public final class FugaTechniqueHandler {
 
             spawnChargeParticles(state.level, player, chargePower, state.ticks);
 
-            if ((state.ticks % 8) == 0 && state.ticks < FugaTechnique.OVERCHARGE_TICKS) {
+            if ((state.ticks % 8) == 0 && state.ticks < FugaTechnique.OVERCHARGE_TICKS && JJKFxBudget.allowSound(state.level)) {
                 float pitch = 0.8F + (chargePower * 0.8F);
                 state.level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.4F, pitch);
             }
 
             if (state.ticks == FugaTechnique.CHARGE_MIN_TICKS) {
                 Vec3 palm = palmAnchor(player);
-                state.level.playSound(null, palm.x, palm.y, palm.z, SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 0.6F, 1.8F);
-                player.displayClientMessage(Component.literal("Open: Fuga ready"), true);
+                if (JJKFxBudget.allowSound(state.level)) {
+                    state.level.playSound(null, palm.x, palm.y, palm.z, SoundEvents.PLAYER_ATTACK_CRIT, SoundSource.PLAYERS, 0.6F, 1.8F);
+                }
+                player.displayClientMessage(Component.translatable("message.jjk.fuga_ready"), true);
             }
 
             if (state.ticks == FugaTechnique.OVERCHARGE_TICKS) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new FugaOverchargeSyncPayload(120));
-                state.level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.6F, 1.6F);
-                player.displayClientMessage(Component.literal("Open: Fuga overcharge"), true);
+                if (JJKFxBudget.allowSound(state.level)) {
+                    state.level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, 0.6F, 1.6F);
+                }
+                player.displayClientMessage(Component.translatable("message.jjk.fuga_overcharge"), true);
             }
 
             if (state.pendingRelease && state.ticks >= FugaTechnique.CHARGE_MIN_TICKS) {
@@ -141,11 +147,13 @@ public final class FugaTechniqueHandler {
 
         if (!BlueTechniqueHandler.hasNoCooldown(playerId)) {
             int cooldownTicks = (int) (FugaTechnique.COOLDOWN_TICKS * (0.4F + (0.6F * chargePower)));
-            BlueTechniqueHandler.setCooldown(playerId, cooldownTicks);
-            BlueTechniqueHandler.syncCooldownToClient(player, cooldownTicks, cooldownTicks);
+            TechniqueCooldownManager.set(player, cooldownTicks, cooldownTicks);
         }
 
-        player.displayClientMessage(Component.literal("Open: Fuga released (" + String.format(Locale.ROOT, "%.0f", chargePower * 100.0F) + "%)"), true);
+        player.displayClientMessage(
+            Component.translatable("message.jjk.fuga_release_power", String.format(Locale.ROOT, "%.0f", chargePower * 100.0F)),
+            true
+        );
     }
 
     private static void ensureChargeProjectile(ServerPlayer player, HoldState state, float chargePower) {
@@ -172,6 +180,9 @@ public final class FugaTechniqueHandler {
     private static void spawnChargeParticles(ServerLevel level, ServerPlayer player, float chargePower, int holdTicks) {
         Vec3 palm = palmAnchor(player);
         if ((holdTicks % 2) != 0) {
+            return;
+        }
+        if (!JJKFxBudget.allowParticles(level, 6)) {
             return;
         }
 

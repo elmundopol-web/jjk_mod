@@ -35,7 +35,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class BlueTechniqueHandler {
 
     private static final List<ActiveBlue> ACTIVE_BLUES = new CopyOnWriteArrayList<>();
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
     private static final Set<UUID> NO_COOLDOWN = ConcurrentHashMap.newKeySet();
 
     private BlueTechniqueHandler() {}
@@ -74,8 +73,6 @@ public final class BlueTechniqueHandler {
     }
 
     public static void tickActive(net.minecraft.server.MinecraftServer server) {
-        tickCooldowns(server);
-
         for (int i = ACTIVE_BLUES.size() - 1; i >= 0; i--) {
             ActiveBlue ab = ACTIVE_BLUES.get(i);
             ServerPlayer owner = ab.level.getServer().getPlayerList().getPlayer(ab.ownerId);
@@ -103,7 +100,6 @@ public final class BlueTechniqueHandler {
     public static void clearActive() {
         for (ActiveBlue ab : ACTIVE_BLUES) discardOrb(ab);
         ACTIVE_BLUES.clear();
-        COOLDOWNS.clear();
         NO_COOLDOWN.clear();
     }
 
@@ -114,20 +110,20 @@ public final class BlueTechniqueHandler {
             return false;
         }
         NO_COOLDOWN.add(playerId);
-        COOLDOWNS.remove(playerId);
+        TechniqueCooldownManager.clear(playerId);
         return true;
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
+        TechniqueCooldownManager.clear(player);
     }
 
     public static int getCooldown(UUID playerId) {
-        return COOLDOWNS.getOrDefault(playerId, 0);
+        return TechniqueCooldownManager.getRemaining(playerId);
     }
 
     public static void setCooldown(UUID playerId, int ticks) {
-        COOLDOWNS.put(playerId, ticks);
+        TechniqueCooldownManager.set(playerId, ticks);
     }
 
     public static boolean hasNoCooldown(UUID playerId) {
@@ -139,7 +135,7 @@ public final class BlueTechniqueHandler {
     private static void invokeOrb(ServerPlayer player) {
         UUID playerId = player.getUUID();
 
-        int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
         if (cooldown > 0 && !NO_COOLDOWN.contains(playerId)) {
             int secs = (cooldown + 19) / 20;
             player.displayClientMessage(Component.translatable("message.jjk.blue_cooldown", secs), true);
@@ -494,38 +490,12 @@ public final class BlueTechniqueHandler {
 
     private static void applyCooldown(ServerPlayer player) {
         if (!NO_COOLDOWN.contains(player.getUUID())) {
-            COOLDOWNS.put(player.getUUID(), BlueConfig.COOLDOWN_TICKS);
-            syncCooldownToClient(player, BlueConfig.COOLDOWN_TICKS, BlueConfig.COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player, BlueConfig.COOLDOWN_TICKS, BlueConfig.COOLDOWN_TICKS);
         }
-    }
-
-    private static void tickCooldowns(net.minecraft.server.MinecraftServer server) {
-        List<UUID> toRemove = new ArrayList<>();
-        for (UUID playerId : new ArrayList<>(COOLDOWNS.keySet())) {
-            if (NO_COOLDOWN.contains(playerId)) {
-                toRemove.add(playerId);
-                continue;
-            }
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int next = current - 1;
-            if (next <= 0) {
-                toRemove.add(playerId);
-                if (server != null) {
-                    ServerPlayer p = server.getPlayerList().getPlayer(playerId);
-                    if (p != null) syncCooldownToClient(p, 0, 0);
-                }
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
-        toRemove.forEach(COOLDOWNS::remove);
     }
 
     public static void syncCooldownToClient(ServerPlayer player, int remaining, int total) {
-        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new CooldownSyncPayload(remaining, total));
+        TechniqueCooldownManager.sync(player, remaining, total);
     }
 
     private static void syncAnimationPhase(ServerPlayer player, int phase) {

@@ -2,7 +2,6 @@ package com.pop.jjk;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.minecraft.core.particles.ParticleTypes;
@@ -26,7 +25,6 @@ public final class DivergingFistTechniqueHandler {
     private static final float INITIAL_DAMAGE = 4.0F;
     private static final float DELAY_DAMAGE = 6.5F;
     private static final List<PendingDivergingHit> PENDING_HITS = new CopyOnWriteArrayList<>();
-    private static final java.util.Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
 
     private DivergingFistTechniqueHandler() {
     }
@@ -40,7 +38,7 @@ public final class DivergingFistTechniqueHandler {
             return;
         }
 
-        int cooldown = COOLDOWNS.getOrDefault(player.getUUID(), 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(player.getUUID());
         if (cooldown > 0) {
             player.displayClientMessage(
                 Component.translatable("message.jjk.diverging_fist_cooldown", formatSeconds(cooldown)),
@@ -60,13 +58,11 @@ public final class DivergingFistTechniqueHandler {
         Vec3 look = horizontalDirection(player.getLookAngle());
         dealInitialHit(player, level, target, look);
         PENDING_HITS.add(new PendingDivergingHit(player.getUUID(), target.getUUID(), level, DIVERGING_FIST_DELAY_TICKS));
-        COOLDOWNS.put(player.getUUID(), DIVERGING_FIST_COOLDOWN_TICKS);
+        TechniqueCooldownManager.set(player.getUUID(), DIVERGING_FIST_COOLDOWN_TICKS);
         player.displayClientMessage(Component.translatable("message.jjk.diverging_fist_cast"), true);
     }
 
     public static void tick() {
-        tickCooldowns();
-
         for (int index = PENDING_HITS.size() - 1; index >= 0; index--) {
             PendingDivergingHit pendingHit = PENDING_HITS.get(index);
             pendingHit.remainingTicks--;
@@ -82,7 +78,6 @@ public final class DivergingFistTechniqueHandler {
 
     public static void clearActive() {
         PENDING_HITS.clear();
-        COOLDOWNS.clear();
     }
 
     private static boolean isTechniqueAvailableForPlayer(ServerPlayer player) {
@@ -173,28 +168,6 @@ public final class DivergingFistTechniqueHandler {
     private static Vec3 horizontalDirection(Vec3 look) {
         Vec3 horizontal = new Vec3(look.x, 0.0, look.z);
         return horizontal.lengthSqr() < 0.0001 ? new Vec3(0.0, 0.0, 1.0) : horizontal.normalize();
-    }
-
-    private static void tickCooldowns() {
-        List<UUID> expired = new java.util.ArrayList<>();
-
-        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int nextValue = current - 1;
-
-            if (nextValue <= 0) {
-                expired.add(playerId);
-            } else {
-                COOLDOWNS.put(playerId, nextValue);
-            }
-        }
-
-        for (UUID playerId : expired) {
-            COOLDOWNS.remove(playerId);
-        }
     }
 
     private static String formatSeconds(int ticks) {

@@ -9,13 +9,10 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
-import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
@@ -49,10 +46,6 @@ public class JJKClientMod implements ClientModInitializer {
     private static boolean abilityHotbarVisible = false;
     private static int selectedAbilityIndex = 0;
     private static boolean infoKeyHeld = false;
-    private static boolean blueUseHeld = false;
-    private static boolean piercingUseHeld = false;
-    private static boolean supernovaUseHeld = false;
-    private static boolean fugaUseHeld = false;
     private static String tecnicaActivaId = JJKRoster.NONE;
     private static Component tecnicaActivaNombre = NO_TECHNIQUE_NAME;
     private static boolean infinitoActivo = false;
@@ -80,7 +73,7 @@ public class JJKClientMod implements ClientModInitializer {
 
     }
 
-    private static void spawnFugaExplosionFX(Minecraft client, double x, double y, double z, float radius) {
+    static void spawnFugaExplosionFX(Minecraft client, double x, double y, double z, float radius) {
         if (client.level == null) return;
         net.minecraft.client.multiplayer.ClientLevel level = client.level;
         // Fogonazo central moderado
@@ -104,7 +97,7 @@ public class JJKClientMod implements ClientModInitializer {
         }
     }
 
-    private static void spawnFugaBeamFX(Minecraft client,
+    static void spawnFugaBeamFX(Minecraft client,
                                         double x1, double y1, double z1,
                                         double x2, double y2, double z2) {
         if (client.level == null) return;
@@ -165,98 +158,9 @@ public class JJKClientMod implements ClientModInitializer {
         }
     }
 
-    private static void handleFugaHoldInput(Minecraft client) {
-        boolean canInteract = client.player != null && client.screen == null;
-        AbilityHotbarEntry entry = getSelectedAbilityEntry();
-
-        boolean isFugaActive = "fuga".equals(tecnicaActivaId);
-        boolean allowByHotbar = shouldCaptureAbilityInput(client)
-            && (isFugaActive || (entry != null && "fuga".equals(entry.id())));
-
-        boolean inputDown = client.options.keyAttack.isDown();
-        boolean useDown = canInteract && allowByHotbar && inputDown;
-
-        if (useDown && !fugaUseHeld) {
-            // iniciar carga y marcar hold (transición a true)
-            // auto-seleccionar Fuga para garantizar captura del input
-            tecnicaActivaId = "fuga";
-            tecnicaActivaNombre = getTechniqueNameComponent("fuga");
-            enviarEstadoTecnicas();
-            ClientPlayNetworking.send(new FugaHoldPayload(true));
-        }
-        // transición a false en release
-        if (!useDown && fugaUseHeld) {
-            ClientPlayNetworking.send(new FugaHoldPayload(false));
-        }
-        fugaUseHeld = useDown;
-    }
-
-    private static void handleSupernovaHoldInput(Minecraft client) {
-        boolean canInteract = client.player != null && client.screen == null;
-        AbilityHotbarEntry entry = getSelectedAbilityEntry();
-
-        boolean allowByHotbar = shouldCaptureAbilityInput(client)
-            && entry != null
-            && "supernova".equals(entry.id());
-
-        boolean inputDown = client.options.keyAttack.isDown();
-        boolean useDown = canInteract && allowByHotbar && inputDown;
-
-        if (useDown && !supernovaUseHeld) {
-            // iniciar carga (compat) y marcar hold
-            ClientPlayNetworking.send(SupernovaUsePayload.INSTANCE);
-        }
-        if (useDown) {
-            ClientPlayNetworking.send(new SupernovaHoldPayload(true));
-        }
-        if (!useDown && supernovaUseHeld) {
-            ClientPlayNetworking.send(new SupernovaHoldPayload(false));
-        }
-        supernovaUseHeld = useDown;
-    }
-
     @Override
     public void onInitializeClient() {
-        EntityRenderers.register(JJKMod.BLUE_ORB, BlueOrbRenderer::new);
-        EntityRenderers.register(JJKMod.RED_PROJECTILE, RedProjectileRenderer::new);
-        EntityRenderers.register(JJKMod.PURPLE_PROJECTILE, PurpleProjectileRenderer::new);
-        EntityRenderers.register(JJKMod.PIERCING_BLOOD_PROJECTILE, PiercingBloodRenderer::new);
-        EntityRenderers.register(JJKMod.SUPERNOVA_ORB_PROJECTILE, SupernovaOrbRenderer::new);
-        EntityRenderers.register(JJKMod.DISMANTLE_PROJECTILE, DismantleProjectileRenderer::new);
-        EntityRenderers.register(JJKMod.FUGA_PROJECTILE, FugaProjectileRenderer::new);
-
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ENERGY,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueEnergyParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.CURSED_ENERGY,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.CursedEnergyParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_CORE,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueCoreParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ORBITAL,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbitalParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ABSORBED,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueAbsorbedParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ORB_CORE,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbCoreParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ORB_SPARK,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbSparkParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLUE_ORB_ATTRACTION,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BlueOrbAttractionParticle::new));
-        // Blood particles
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_CORE,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodCoreParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_TRAIL,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodTrailParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.BLOOD_EXPLOSION,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.BloodExplosionParticle::new));
-        // Fire (Fuga)
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_CHARGE,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireChargeParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_BEAM,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireBeamParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_TRAIL,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireTrailParticle::new));
-        ParticleFactoryRegistry.getInstance().register(JJKParticles.FIRE_EXPLOSION,
-            sprites -> new com.pop.jjk.particle.JJKParticleFactory(sprites, com.pop.jjk.particle.FireExplosionParticle::new));
+        JJKClientVisualRegistrar.registerAll();
 
         abrirMenu = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "key.jjk.open_menu",
@@ -271,52 +175,7 @@ public class JJKClientMod implements ClientModInitializer {
             GENERAL_CATEGORY
         ));
 
-        ClientPlayNetworking.registerGlobalReceiver(CharacterStatePayload.TYPE, (payload, context) ->
-            context.client().execute(() -> applyCharacterState(payload.characterId(), context.client()))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(CursedEnergySyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> {
-                cursedEnergy = payload.currentEnergy();
-                maxCursedEnergy = payload.maxEnergy();
-            })
-        );
-        ClientPlayNetworking.registerGlobalReceiver(CooldownSyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> {
-                cooldownRemaining = payload.remainingTicks();
-                cooldownTotal = payload.totalTicks();
-                cooldownReceivedTick = System.currentTimeMillis();
-            })
-        );
-        ClientPlayNetworking.registerGlobalReceiver(ScreenShakePayload.TYPE, (payload, context) ->
-            context.client().execute(() -> ScreenShakeManager.trigger(payload.intensity(), payload.durationTicks()))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(FugaBeamFXPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> spawnFugaBeamFX(Minecraft.getInstance(),
-                payload.x1(), payload.y1(), payload.z1(), payload.x2(), payload.y2(), payload.z2()))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(FugaOverchargeSyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> fugaSkyTintTicks = Math.max(fugaSkyTintTicks, payload.durationTicks()))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(FugaExplosionFXPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> spawnFugaExplosionFX(Minecraft.getInstance(),
-                payload.x(), payload.y(), payload.z(), payload.radius()))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(BlueAnimSyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> {
-                if (payload.phase() == BlueAnimSyncPayload.PHASE_STOP) {
-                    blueAnimStates.remove(payload.entityId());
-                } else {
-                    blueAnimStates.put(payload.entityId(), new BluePlayerAnimState(payload.phase()));
-                }
-            })
-        );
-        ClientPlayNetworking.registerGlobalReceiver(InfiniteDomainSyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> InfiniteDomainOverlay.handleSync(payload))
-        );
-        ClientPlayNetworking.registerGlobalReceiver(MalevolentShrineSyncPayload.TYPE, (payload, context) ->
-            context.client().execute(() -> MalevolentShrineOverlay.handleSync(payload))
-        );
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> resetClientState());
+        JJKClientNetworking.registerReceivers();
         HudRenderCallback.EVENT.register(AbilityHotbarOverlay::render);
         HudRenderCallback.EVENT.register(EnemyHealthOverlay::render);
         HudRenderCallback.EVENT.register(CursedEnergyOverlay::render);
@@ -349,10 +208,7 @@ public class JJKClientMod implements ClientModInitializer {
             }
             infoKeyHeld = infoDown;
 
-            handleBlueHoldInput(client);
-            handlePiercingHoldInput(client);
-            handleSupernovaHoldInput(client);
-            handleFugaHoldInput(client);
+            ClientAbilityInputHandler.tick(client);
             if (fugaSkyTintTicks > 0) fugaSkyTintTicks--;
         });
     }
@@ -574,11 +430,6 @@ public class JJKClientMod implements ClientModInitializer {
             return true;
         }
 
-        if ("piercing_blood".equals(entry.id())) {
-            // Se maneja por input sostenido en handlePiercingHoldInput
-            return true;
-        }
-
         if ("supernova".equals(entry.id())) {
             // Se maneja por input sostenido en handleSupernovaHoldInput
             return true;
@@ -635,64 +486,11 @@ public class JJKClientMod implements ClientModInitializer {
         syncSelectionWithActiveTechnique(false, client);
     }
 
-    private static boolean shouldCaptureAbilityInput(Minecraft client) {
+    static boolean shouldCaptureAbilityInput(Minecraft client) {
         return client.player != null
             && client.screen == null
             && abilityHotbarVisible
             && hasSelectedCharacter();
-    }
-
-    private static void handleBlueHoldInput(Minecraft client) {
-        AbilityHotbarEntry selectedEntry = getSelectedAbilityEntry();
-        boolean isBlueSelected = shouldCaptureAbilityInput(client)
-            && selectedEntry != null
-            && "blue".equals(selectedEntry.id());
-
-        boolean useDown = isBlueSelected && client.options.keyAttack.isDown();
-
-        // Detectar flanco de subida (press event) — enviar un solo paquete por clic
-        if (useDown && !blueUseHeld) {
-            ClientPlayNetworking.send(new BlueTechniqueUsePayload(true));
-        }
-
-        blueUseHeld = useDown;
-    }
-
-    private static void handlePiercingHoldInput(Minecraft client) {
-        boolean canInteract = client.player != null && client.screen == null;
-        AbilityHotbarEntry entry = getSelectedAbilityEntry();
-
-        boolean allowByHotbar = shouldCaptureAbilityInput(client)
-            && entry != null
-            && "piercing_blood".equals(entry.id());
-        boolean inputDown = client.options.keyAttack.isDown();
-        boolean useDown = canInteract && allowByHotbar && inputDown;
-
-        if (useDown && !piercingUseHeld) {
-            debugPiercingBloodClient("press/use payload", client, entry);
-            ClientPlayNetworking.send(PiercingBloodUsePayload.INSTANCE);
-        }
-        if (useDown) {
-            ClientPlayNetworking.send(new PiercingBloodHoldPayload(true));
-        }
-        if (!useDown && piercingUseHeld) {
-            debugPiercingBloodClient("release/hold false", client, entry);
-            ClientPlayNetworking.send(new PiercingBloodHoldPayload(false));
-        }
-        piercingUseHeld = useDown;
-    }
-
-    private static void debugPiercingBloodClient(String event, Minecraft client, AbilityHotbarEntry entry) {
-        String selectedId = entry == null ? "null" : entry.id();
-        String playerName = client.player == null ? "null" : client.player.getName().getString();
-        System.out.println(
-            "[PB_DEBUG][client][" + playerName + "] "
-                + event
-                + " selected=" + selectedId
-                + " activeTechnique=" + tecnicaActivaId
-                + " hotbarVisible=" + abilityHotbarVisible
-                + " screen=" + (client.screen == null ? "null" : client.screen.getClass().getSimpleName())
-        );
     }
 
     private static void tickBlueAnimationStates() {
@@ -732,7 +530,7 @@ public class JJKClientMod implements ClientModInitializer {
             && client.screen == null;
     }
 
-    private static void applyCharacterState(String newCharacterId, Minecraft client) {
+    static void applyCharacterState(String newCharacterId, Minecraft client) {
         if (!JJKRoster.isValidCharacter(newCharacterId)) {
             characterId = JJKRoster.NONE;
             characterName = NO_CHARACTER_NAME;
@@ -799,6 +597,12 @@ public class JJKClientMod implements ClientModInitializer {
                 true
             );
         }
+    }
+
+    static void selectTechniqueForHold(String tecnicaId) {
+        tecnicaActivaId = tecnicaId;
+        tecnicaActivaNombre = getTechniqueNameComponent(tecnicaId);
+        enviarEstadoTecnicas();
     }
 
     private static void clampSelectionIndex() {
@@ -869,11 +673,6 @@ public class JJKClientMod implements ClientModInitializer {
             return;
         }
 
-        if ("piercing_blood".equals(tecnicaId)) {
-            // Piercing Blood se dispara solo por input sostenido.
-            return;
-        }
-
         if ("flowing_red_scale".equals(tecnicaId)) {
             ClientPlayNetworking.send(FlowingRedScaleUsePayload.INSTANCE);
             enfriamientoUsoTicks = USE_BUFFER_TICKS;
@@ -918,17 +717,37 @@ public class JJKClientMod implements ClientModInitializer {
         ClientPlayNetworking.send(new TechniqueSelectionPayload(tecnicaActivaId, infinitoActivo && supportsInfinity()));
     }
 
-    private static void resetClientState() {
+    static void applyCursedEnergySync(int current, int max) {
+        cursedEnergy = current;
+        maxCursedEnergy = max;
+    }
+
+    static void applyCooldownSync(int remaining, int total) {
+        cooldownRemaining = remaining;
+        cooldownTotal = total;
+        cooldownReceivedTick = System.currentTimeMillis();
+    }
+
+    static void applyFugaOverchargeSync(int durationTicks) {
+        fugaSkyTintTicks = Math.max(fugaSkyTintTicks, durationTicks);
+    }
+
+    static void applyBlueAnimSync(BlueAnimSyncPayload payload) {
+        if (payload.phase() == BlueAnimSyncPayload.PHASE_STOP) {
+            blueAnimStates.remove(payload.entityId());
+        } else {
+            blueAnimStates.put(payload.entityId(), new BluePlayerAnimState(payload.phase()));
+        }
+    }
+
+    static void resetClientState() {
         characterId = JJKRoster.NONE;
         characterName = NO_CHARACTER_NAME;
         characterSelectionPending = false;
         abilityHotbarVisible = false;
         selectedAbilityIndex = 0;
         infoKeyHeld = false;
-        blueUseHeld = false;
-        piercingUseHeld = false;
-        supernovaUseHeld = false;
-        fugaUseHeld = false;
+        ClientAbilityInputHandler.reset();
         tecnicaActivaId = JJKRoster.NONE;
         tecnicaActivaNombre = NO_TECHNIQUE_NAME;
         infinitoActivo = false;

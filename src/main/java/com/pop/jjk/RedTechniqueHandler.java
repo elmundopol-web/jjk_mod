@@ -16,7 +16,7 @@ public final class RedTechniqueHandler {
 
     public static void activate(ServerPlayer player) {
         UUID playerId = player.getUUID();
-        int cooldown = BlueTechniqueHandler.getCooldown(playerId);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
 
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
             int remainingSeconds = (cooldown + 19) / 20;
@@ -32,8 +32,7 @@ public final class RedTechniqueHandler {
         ServerLevel level = (ServerLevel) player.level();
 
         if (!BlueTechniqueHandler.hasNoCooldown(playerId)) {
-            BlueTechniqueHandler.setCooldown(playerId, RED_COOLDOWN_TICKS);
-            BlueTechniqueHandler.syncCooldownToClient(player, RED_COOLDOWN_TICKS, RED_COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player, RED_COOLDOWN_TICKS, RED_COOLDOWN_TICKS);
         }
 
         RedProjectileEntity redProjectile = new RedProjectileEntity(level, player);

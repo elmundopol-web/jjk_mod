@@ -47,7 +47,6 @@ public final class InfiniteDomainTechniqueHandler {
     private static final BlockState DOMAIN_SHELL_BLOCK = Blocks.BLACK_CONCRETE.defaultBlockState();
 
     private static final Map<UUID, ActiveDomain> ACTIVE_DOMAINS = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
     private static final Map<UUID, ParalyzedMobState> PARALYZED_MOBS = new ConcurrentHashMap<>();
     private static final Set<UUID> BONUS_DAMAGE_GUARD = ConcurrentHashMap.newKeySet();
 
@@ -70,7 +69,7 @@ public final class InfiniteDomainTechniqueHandler {
             return;
         }
 
-        int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
         if (cooldown > 0 && !noCooldown) {
             player.displayClientMessage(
                 Component.translatable("message.jjk.infinite_domain_cooldown", formatSeconds(cooldown)),
@@ -90,23 +89,23 @@ public final class InfiniteDomainTechniqueHandler {
         initializeDomainShell(domain);
         ACTIVE_DOMAINS.put(playerId, domain);
         if (!noCooldown) {
-            COOLDOWNS.put(playerId, DOMAIN_COOLDOWN_TICKS);
-            syncCooldownToClient(player, DOMAIN_COOLDOWN_TICKS, DOMAIN_COOLDOWN_TICKS);
+            TechniqueCooldownManager.set(player, DOMAIN_COOLDOWN_TICKS, DOMAIN_COOLDOWN_TICKS);
         } else {
-            COOLDOWNS.remove(playerId);
-            syncCooldownToClient(player, 0, 0);
+            TechniqueCooldownManager.clear(player);
         }
 
-        level.playSound(null, player.blockPosition(), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.4F, 0.55F);
-        level.playSound(null, player.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.PLAYERS, 0.8F, 0.75F);
+        if (JJKFxBudget.allowSound(level)) {
+            level.playSound(null, player.blockPosition(), SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 1.4F, 0.55F);
+        }
+        if (JJKFxBudget.allowSound(level)) {
+            level.playSound(null, player.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.PLAYERS, 0.8F, 0.75F);
+        }
         broadcastDomainState(domain, true);
         spawnActivationParticles(domain);
         player.displayClientMessage(Component.translatable("message.jjk.infinite_domain_cast"), true);
     }
 
     public static void tick(MinecraftServer server) {
-        tickCooldowns(server);
-
         Set<UUID> paralyzedThisTick = new java.util.HashSet<>();
         Set<UUID> domainsToRemove = new java.util.HashSet<>();
 
@@ -148,21 +147,25 @@ public final class InfiniteDomainTechniqueHandler {
                 domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_AMBIENT, SoundSource.PLAYERS, volume, pitch);
             }
 
-            if (buildProgress > 0.55F && domain.ageTicks % 72 == 0) {
+            if (buildProgress > 0.55F && domain.ageTicks % 72 == 0 && JJKFxBudget.allowSound(domain.level)) {
                 float volume = 0.10F + (0.10F * collapseProgress);
                 float pitch = 0.95F + (0.20F * domain.level.random.nextFloat());
                 domain.level.playSound(null, owner.blockPosition(), SoundEvents.PORTAL_TRIGGER, SoundSource.PLAYERS, volume, pitch);
             }
 
-            if (domain.remainingTicks == DOMAIN_COLLAPSE_TICKS) {
+            if (domain.remainingTicks == DOMAIN_COLLAPSE_TICKS && JJKFxBudget.allowSound(domain.level)) {
                 domain.level.playSound(null, owner.blockPosition(), SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(), SoundSource.PLAYERS, 0.55F, 0.7F);
             }
 
             if (domain.remainingTicks <= 0) {
                 owner.displayClientMessage(Component.translatable("message.jjk.infinite_domain_end"), true);
                 spawnCollapseParticles(domain);
-                domain.level.playSound(null, owner.blockPosition(), SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.PLAYERS, 1.0F, 0.65F);
-                domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.8F, 0.6F);
+                if (JJKFxBudget.allowSound(domain.level)) {
+                    domain.level.playSound(null, owner.blockPosition(), SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.PLAYERS, 1.0F, 0.65F);
+                }
+                if (JJKFxBudget.allowSound(domain.level)) {
+                    domain.level.playSound(null, owner.blockPosition(), SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS, 0.8F, 0.6F);
+                }
                 restoreDomainShell(domain);
                 broadcastDomainState(domain, false);
                 domainsToRemove.add(ownerId);
@@ -217,7 +220,6 @@ public final class InfiniteDomainTechniqueHandler {
         }
 
         ACTIVE_DOMAINS.clear();
-        COOLDOWNS.clear();
         BONUS_DAMAGE_GUARD.clear();
 
         for (ParalyzedMobState state : PARALYZED_MOBS.values()) {
@@ -228,8 +230,7 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
-        syncCooldownToClient(player, 0, 0);
+        TechniqueCooldownManager.clear(player);
     }
 
     public static void syncActiveDomainsToPlayer(ServerPlayer player) {
@@ -817,32 +818,6 @@ public final class InfiniteDomainTechniqueHandler {
         }
     }
 
-    private static void tickCooldowns(MinecraftServer server) {
-        Set<UUID> expired = new java.util.HashSet<>();
-        for (UUID playerId : new java.util.ArrayList<>(COOLDOWNS.keySet())) {
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-            int next = current - 1;
-
-            if (next <= 0) {
-                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
-                if (player != null) {
-                    syncCooldownToClient(player, 0, 0);
-                }
-                expired.add(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
-        expired.forEach(COOLDOWNS::remove);
-    }
-
-    private static void syncCooldownToClient(ServerPlayer player, int remaining, int total) {
-        ServerPlayNetworking.send(player, new CooldownSyncPayload(remaining, total));
-    }
-
     private static void broadcastDomainState(ActiveDomain domain, boolean active) {
         InfiniteDomainSyncPayload payload = createSyncPayload(domain, active);
         for (ServerPlayer player : domain.level.players()) {
@@ -863,6 +838,9 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void spawnActivationParticles(ActiveDomain domain) {
+        if (!JJKFxBudget.allowParticles(domain.level, 160)) {
+            return;
+        }
         for (int i = 0; i < 28; i++) {
             double angle = (Math.PI * 2.0D * i) / 28.0D;
             double x = domain.center.x + Math.cos(angle) * DOMAIN_RADIUS;
@@ -878,6 +856,9 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void spawnAmbientParticles(ActiveDomain domain) {
+        if (!JJKFxBudget.allowParticles(domain.level, 60)) {
+            return;
+        }
         float buildProgress = getBuildProgress(domain);
         float collapseProgress = getCollapseProgress(domain);
         float intensity = Mth.clamp((buildProgress * 0.85F) + (collapseProgress * 0.35F), 0.15F, 1.15F);
@@ -942,6 +923,9 @@ public final class InfiniteDomainTechniqueHandler {
     }
 
     private static void spawnCollapseParticles(ActiveDomain domain) {
+        if (!JJKFxBudget.allowParticles(domain.level, 180)) {
+            return;
+        }
         int ringCount = 24;
         for (int i = 0; i < ringCount; i++) {
             double angle = (Math.PI * 2.0D * i) / ringCount;

@@ -29,7 +29,7 @@ public final class JJKRoster {
         registerTechnique("max_elephant", "technique.jjk.max_elephant", "technique.jjk.max_elephant_desc", "technique.jjk.max_elephant_hint", 0x5F86A6, false);
         registerTechnique("boogie_woogie", "technique.jjk.boogie_woogie", "technique.jjk.boogie_woogie_desc", "technique.jjk.boogie_woogie_hint", 0xA76B3F, false);
         registerTechnique("close_quarters", "technique.jjk.close_quarters", "technique.jjk.close_quarters_desc", "technique.jjk.close_quarters_hint", 0xD79A61, false);
-        registerTechnique("piercing_blood", "technique.jjk.piercing_blood", "technique.jjk.piercing_blood_desc", "technique.jjk.piercing_blood_hint", 0xCC1010, true);
+        registerTechnique("piercing_blood", "technique.jjk.piercing_blood", "technique.jjk.piercing_blood_desc", "technique.jjk.piercing_blood_hint", 0xCC1010, false);
         registerTechnique("flowing_red_scale", "technique.jjk.flowing_red_scale", "technique.jjk.flowing_red_scale_desc", "technique.jjk.flowing_red_scale_hint", 0xFF4040, true);
         registerTechnique("supernova", "technique.jjk.supernova", "technique.jjk.supernova_desc", "technique.jjk.supernova_hint", 0x8B0000, true);
 
@@ -38,7 +38,7 @@ public final class JJKRoster {
         registerCharacter("sukuna", "character.jjk.sukuna", "character.jjk.sukuna_desc", 0xC44E4E, List.of("dismantle", "cleave", "fuga", "malevolent_shrine"), false);
         registerCharacter("megumi", "character.jjk.megumi", "character.jjk.megumi_desc", 0x6A84C8, List.of("divine_dog", "nue", "max_elephant"), false);
         registerCharacter("todo", "character.jjk.todo", "character.jjk.todo_desc", 0xD09C67, List.of("boogie_woogie", "black_flash", "close_quarters"), false);
-        registerCharacter("choso", "character.jjk.choso", "character.jjk.choso_desc", 0xCC1010, List.of("piercing_blood", "flowing_red_scale", "supernova"), false);
+        registerCharacter("choso", "character.jjk.choso", "character.jjk.choso_desc", 0xCC1010, List.of("flowing_red_scale", "supernova"), false);
     }
 
     private JJKRoster() {

@@ -30,14 +30,10 @@ public final class JJKCommands {
         boolean enabled = BlueTechniqueHandler.toggleNoCooldown(player);
 
         if (enabled) {
-            InfiniteDomainTechniqueHandler.clearCooldown(player);
-            MalevolentShrineTechniqueHandler.clearCooldown(player);
-            PiercingBloodTechniqueHandler.clearCooldown(player);
-            FlowingRedScaleTechniqueHandler.clearCooldown(player);
-            SupernovaTechniqueHandler.clearCooldown(player);
-            source.sendSuccess(() -> Component.literal("Cooldowns de Gojo desactivados para ti."), false);
+            TechniqueCooldownManager.clear(player);
+            source.sendSuccess(() -> Component.literal("Cooldowns desactivados para ti."), false);
         } else {
-            source.sendSuccess(() -> Component.literal("Cooldowns de Gojo reactivados."), false);
+            source.sendSuccess(() -> Component.literal("Cooldowns reactivados."), false);
         }
 
         return 1;
@@ -45,13 +41,8 @@ public final class JJKCommands {
 
     private static int clearCooldown(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        BlueTechniqueHandler.clearCooldown(player);
-        InfiniteDomainTechniqueHandler.clearCooldown(player);
-        MalevolentShrineTechniqueHandler.clearCooldown(player);
-        PiercingBloodTechniqueHandler.clearCooldown(player);
-        FlowingRedScaleTechniqueHandler.clearCooldown(player);
-        SupernovaTechniqueHandler.clearCooldown(player);
-        source.sendSuccess(() -> Component.literal("Cooldowns de Gojo limpiados."), false);
+        TechniqueCooldownManager.clear(player);
+        source.sendSuccess(() -> Component.literal("Cooldowns limpiados."), false);
         return 1;
     }
 

@@ -20,7 +20,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
@@ -32,24 +32,27 @@ import net.minecraft.world.phys.Vec3;
 
 public class RedProjectileEntity extends Projectile {
 
-    private static final int RED_DAMAGE_INTERVAL = 6;
-    private static final int RED_MAX_LIFETIME_TICKS = 24;
+    private static final int RED_DAMAGE_INTERVAL = 4;
+    private static final int RED_MAX_LIFETIME_TICKS = 40;
     private static final int RED_BLOCKS_PER_TICK = 5;
-    private static final double RED_DISTANCE = 14.0;
-    private static final double RED_SPEED = 0.82;
+    private static final double RED_DISTANCE = 24.0;
+    private static final double RED_SPEED = 1.8;
     private static final double RED_RADIUS = 3.25;
     private static final double RED_BREAK_RADIUS = 1.85;
-    private static final double RED_PUSH_STRENGTH = 0.28;
-    private static final double RED_MAX_PUSH_BONUS = 0.22;
-    private static final double RED_BLOCK_PUSH_STRENGTH = 0.7;
-    private static final double RED_MAX_HORIZONTAL_SPEED = 2.8;
-    private static final double RED_MAX_VERTICAL_SPEED = 1.3;
-    private static final float RED_DAMAGE_AMOUNT = 2.0F;
-    private static final float RED_IMPACT_DAMAGE = 4.0F;
+    private static final double RED_PUSH_STRENGTH = 1.8;
+    private static final double RED_SECONDARY_PUSH_SCALE = 0.4;
+    private static final double RED_VERTICAL_PUSH = 0.5;
+    private static final double RED_BLOCK_PUSH_STRENGTH = 2.2;
+    private static final double RED_MAX_HORIZONTAL_SPEED = 4.8;
+    private static final double RED_MAX_VERTICAL_SPEED = 2.4;
+    private static final float RED_DAMAGE_AMOUNT = 3.0F;
+    private static final float RED_IMPACT_DAMAGE = 10.0F;
+    private static final double RED_FINAL_BURST_RADIUS = 4.0;
     private static final DustParticleOptions RED_DUST = new DustParticleOptions(0xFF3B30, 1.45F);
     private static final DustParticleOptions RED_DUST_SMALL = new DustParticleOptions(0xFF8A80, 0.95F);
 
     private final Set<UUID> hitMobIds = new HashSet<>();
+    private final Set<UUID> launchedBlockIds = new HashSet<>();
     private double distanceTravelled;
 
     public RedProjectileEntity(EntityType<? extends RedProjectileEntity> entityType, Level level) {
@@ -70,6 +73,7 @@ public class RedProjectileEntity extends Projectile {
         this.setYRot(owner.getYRot());
         this.setXRot(owner.getXRot());
         this.setOldPosAndRot();
+        level.playSound(null, owner.blockPosition(), SoundEvents.BREEZE_WIND_CHARGE_BURST.value(), SoundSource.PLAYERS, 1.0F, 1.3F);
     }
 
     @Override
@@ -101,7 +105,7 @@ public class RedProjectileEntity extends Projectile {
         double remainingDistance = RED_DISTANCE - this.distanceTravelled;
 
         if (remainingDistance <= 0.0) {
-            this.finishFlight();
+            this.finishFlight(currentVelocity.normalize());
             return;
         }
 
@@ -119,12 +123,13 @@ public class RedProjectileEntity extends Projectile {
             return;
         }
 
-        breakBlocksAlongPath(serverLevel, previousPosition, nextPosition);
-        pulseRed(serverLevel, nextPosition, currentVelocity.normalize(), this.tickCount % RED_DAMAGE_INTERVAL == 0);
+        Vec3 directionHint = currentVelocity.normalize();
+        this.breakBlocksAlongPath(serverLevel, previousPosition, nextPosition, directionHint);
+        pulseRed(serverLevel, nextPosition, directionHint, this.tickCount % RED_DAMAGE_INTERVAL == 0);
         spawnRedParticles(serverLevel, nextPosition, false);
 
         if (this.distanceTravelled >= RED_DISTANCE || this.tickCount >= RED_MAX_LIFETIME_TICKS) {
-            this.finishFlight();
+            this.finishFlight(directionHint);
         }
     }
 
@@ -138,9 +143,9 @@ public class RedProjectileEntity extends Projectile {
         return false;
     }
 
-    private void finishFlight() {
+    private void finishFlight(Vec3 directionHint) {
         if (this.level() instanceof ServerLevel serverLevel) {
-            explodeAtEnd(serverLevel, this.position());
+            explodeAtEnd(serverLevel, this.position(), directionHint);
         }
 
         this.discard();
@@ -158,9 +163,16 @@ public class RedProjectileEntity extends Projectile {
         Entity owner = this.getOwner();
         ServerPlayer playerOwner = owner instanceof ServerPlayer serverPlayer ? serverPlayer : null;
 
-        for (Mob mob : level.getEntitiesOfClass(Mob.class, effectArea, Mob::isAlive)) {
-            Vec3 mobCenter = mob.position().add(0.0, mob.getBbHeight() * 0.5, 0.0);
-            Vec3 pushDirection = mobCenter.subtract(center);
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, effectArea, LivingEntity::isAlive)) {
+            if (entity == owner) {
+                continue;
+            }
+            if (entity instanceof net.minecraft.world.entity.player.Player player && player.isSpectator()) {
+                continue;
+            }
+
+            Vec3 entityCenter = entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+            Vec3 pushDirection = entityCenter.subtract(center);
             double distanceSquared = pushDirection.lengthSqr();
 
             if (distanceSquared < 0.0001) {
@@ -169,31 +181,25 @@ public class RedProjectileEntity extends Projectile {
             }
 
             double distance = Math.sqrt(distanceSquared);
-            double clampedDistance = Math.min(distance, RED_RADIUS);
-            double strength = RED_PUSH_STRENGTH + ((RED_RADIUS - clampedDistance) / RED_RADIUS) * RED_MAX_PUSH_BONUS;
-            Vec3 push = pushDirection.normalize().scale(strength);
+            boolean directHit = distance <= Math.max(1.05D, (entity.getBbWidth() * 0.6D) + 0.65D);
+            double pushScale = directHit ? 1.0D : RED_SECONDARY_PUSH_SCALE;
+            applyRepulsion(level, entity, playerOwner, center, directionHint, pushScale);
 
-            mob.push(push.x, 0.08 + (push.y * 0.08), push.z);
-            mob.setDeltaMovement(clampVelocity(mob.getDeltaMovement(), 0.6, 0.32));
-
-            if (this.hitMobIds.add(mob.getUUID())) {
-                if (playerOwner != null) {
-                    mob.hurtServer(level, level.damageSources().playerAttack(playerOwner), RED_IMPACT_DAMAGE);
-                } else {
-                    mob.hurtServer(level, level.damageSources().magic(), RED_IMPACT_DAMAGE);
-                }
+            if (directHit && this.hitMobIds.add(entity.getUUID())) {
+                applyImmediateDamage(level, entity, playerOwner, RED_IMPACT_DAMAGE);
+                level.playSound(null, entity.blockPosition(), SoundEvents.PLAYER_ATTACK_KNOCKBACK, SoundSource.PLAYERS, 0.8F, 1.1F);
             }
 
-            if (shouldDamage) {
-                if (playerOwner != null) {
-                    mob.hurtServer(level, level.damageSources().playerAttack(playerOwner), RED_DAMAGE_AMOUNT);
-                } else {
-                    mob.hurtServer(level, level.damageSources().magic(), RED_DAMAGE_AMOUNT);
-                }
+            if (directHit && shouldDamage) {
+                applyImmediateDamage(level, entity, playerOwner, RED_DAMAGE_AMOUNT);
             }
         }
 
         for (FallingBlockEntity fallingBlock : level.getEntitiesOfClass(FallingBlockEntity.class, effectArea, FallingBlockEntity::isAlive)) {
+            if (!this.launchedBlockIds.add(fallingBlock.getUUID())) {
+                continue;
+            }
+
             Vec3 pushDirection = fallingBlock.position().subtract(center);
 
             if (pushDirection.lengthSqr() < 0.0001) {
@@ -201,14 +207,16 @@ public class RedProjectileEntity extends Projectile {
             }
 
             Vec3 push = pushDirection.normalize().scale(RED_BLOCK_PUSH_STRENGTH);
-            Vec3 updatedVelocity = fallingBlock.getDeltaMovement().scale(0.82).add(push.x, 0.18 + (push.y * 0.15), push.z);
+            Vec3 updatedVelocity = fallingBlock.getDeltaMovement().scale(0.25).add(push.x, RED_VERTICAL_PUSH + 0.18D, push.z);
 
-            fallingBlock.setNoGravity(true);
-            fallingBlock.setDeltaMovement(clampVelocity(updatedVelocity, 1.75, 1.0));
+            fallingBlock.disableDrop();
+            fallingBlock.setNoGravity(false);
+            fallingBlock.setDeltaMovement(clampVelocity(updatedVelocity, RED_MAX_HORIZONTAL_SPEED, RED_MAX_VERTICAL_SPEED));
+            fallingBlock.hurtMarked = true;
         }
     }
 
-    private static void breakBlocksAlongPath(ServerLevel level, Vec3 from, Vec3 to) {
+    private void breakBlocksAlongPath(ServerLevel level, Vec3 from, Vec3 to, Vec3 directionHint) {
         List<BlockPos> candidates = new ArrayList<>();
         BlockPos fromPos = BlockPos.containing(from);
         BlockPos toPos = BlockPos.containing(to);
@@ -242,7 +250,7 @@ public class RedProjectileEntity extends Projectile {
                 continue;
             }
 
-            breakBlock(level, pos, state);
+            this.breakBlock(level, pos, state, to, directionHint);
             broken++;
 
             if (broken >= RED_BLOCKS_PER_TICK) {
@@ -279,17 +287,32 @@ public class RedProjectileEntity extends Projectile {
         return distancePointToSegment(pos.getCenter(), from, to) <= RED_BREAK_RADIUS;
     }
 
-    private static void breakBlock(ServerLevel level, BlockPos pos, BlockState state) {
+    private void breakBlock(ServerLevel level, BlockPos pos, BlockState state, Vec3 redCenter, Vec3 directionHint) {
         Vec3 center = pos.getCenter();
         BlockParticleOption blockParticle = new BlockParticleOption(ParticleTypes.BLOCK, state);
 
         level.sendParticles(blockParticle, center.x, center.y, center.z, 16, 0.18, 0.18, 0.18, 0.03);
         level.sendParticles(RED_DUST_SMALL, center.x, center.y, center.z, 10, 0.08, 0.08, 0.08, 0.0);
         level.playSound(null, pos, state.getSoundType().getBreakSound(), SoundSource.BLOCKS, state.getSoundType().getVolume(), state.getSoundType().getPitch());
-        level.destroyBlock(pos, false);
+        FallingBlockEntity fallingBlock = FallingBlockEntity.fall(level, pos, state);
+        if (fallingBlock != null) {
+            Vec3 pushDirection = center.subtract(redCenter);
+            if (pushDirection.lengthSqr() < 0.0001D) {
+                pushDirection = directionHint;
+            }
+            Vec3 launch = pushDirection.normalize().scale(RED_BLOCK_PUSH_STRENGTH).add(0.0D, RED_VERTICAL_PUSH + 0.2D, 0.0D);
+            fallingBlock.setHurtsEntities(0.0F, 0);
+            fallingBlock.disableDrop();
+            fallingBlock.setNoGravity(false);
+            fallingBlock.setDeltaMovement(clampVelocity(launch, RED_MAX_HORIZONTAL_SPEED, RED_MAX_VERTICAL_SPEED));
+            fallingBlock.hurtMarked = true;
+            this.launchedBlockIds.add(fallingBlock.getUUID());
+        } else {
+            level.destroyBlock(pos, false);
+        }
     }
 
-    private static void explodeAtEnd(ServerLevel level, Vec3 center) {
+    private void explodeAtEnd(ServerLevel level, Vec3 center, Vec3 directionHint) {
         level.playSound(
             null,
             center.x,
@@ -300,8 +323,63 @@ public class RedProjectileEntity extends Projectile {
             1.1F,
             1.05F
         );
+        Vec3 fallbackDirection = directionHint.lengthSqr() < 0.0001D ? new Vec3(1.0D, 0.0D, 0.0D) : directionHint;
+        Entity owner = this.getOwner();
+        ServerPlayer playerOwner = owner instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+        AABB burstArea = new AABB(
+            center.x - RED_FINAL_BURST_RADIUS,
+            center.y - RED_FINAL_BURST_RADIUS,
+            center.z - RED_FINAL_BURST_RADIUS,
+            center.x + RED_FINAL_BURST_RADIUS,
+            center.y + RED_FINAL_BURST_RADIUS,
+            center.z + RED_FINAL_BURST_RADIUS
+        );
+
+        for (LivingEntity entity : level.getEntitiesOfClass(LivingEntity.class, burstArea, LivingEntity::isAlive)) {
+            if (entity == owner) {
+                continue;
+            }
+            if (entity instanceof net.minecraft.world.entity.player.Player player && player.isSpectator()) {
+                continue;
+            }
+
+            applyRepulsion(level, entity, playerOwner, center, fallbackDirection, 1.0D);
+            applyImmediateDamage(level, entity, playerOwner, RED_IMPACT_DAMAGE);
+            level.playSound(null, entity.blockPosition(), SoundEvents.PLAYER_ATTACK_KNOCKBACK, SoundSource.PLAYERS, 0.8F, 1.1F);
+        }
+
         spawnRedParticles(level, center, true);
         sendShakeToNearby(level, center, 2.5F, 8);
+    }
+
+    private static void applyRepulsion(ServerLevel level, LivingEntity entity, ServerPlayer owner, Vec3 center, Vec3 directionHint, double scale) {
+        Vec3 entityCenter = entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+        Vec3 pushDirection = entityCenter.subtract(center);
+        if (pushDirection.lengthSqr() < 0.0001D) {
+            pushDirection = directionHint;
+        }
+
+        Vec3 horizontalPush = pushDirection.normalize().scale(RED_PUSH_STRENGTH * scale);
+        Vec3 totalPush = new Vec3(horizontalPush.x, RED_VERTICAL_PUSH * scale, horizontalPush.z);
+
+        entity.push(totalPush.x, totalPush.y, totalPush.z);
+        entity.setDeltaMovement(clampVelocity(entity.getDeltaMovement(), RED_MAX_HORIZONTAL_SPEED, RED_MAX_VERTICAL_SPEED));
+        entity.hurtMarked = true;
+        entity.invulnerableTime = 0;
+        entity.hurtTime = 0;
+    }
+
+    private static void applyImmediateDamage(ServerLevel level, LivingEntity entity, ServerPlayer owner, float damage) {
+        entity.invulnerableTime = 0;
+        entity.hurtTime = 0;
+        if (owner != null) {
+            entity.hurtServer(level, level.damageSources().playerAttack(owner), damage);
+        } else {
+            entity.hurtServer(level, level.damageSources().magic(), damage);
+        }
+        entity.invulnerableTime = 0;
+        entity.hurtTime = 0;
+        entity.hurtMarked = true;
     }
 
     private static double distancePointToSegment(Vec3 point, Vec3 segmentStart, Vec3 segmentEnd) {

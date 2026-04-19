@@ -26,7 +26,6 @@ public final class PiercingBloodTechniqueHandler {
     private static final DustParticleOptions CHARGE_DUST = new DustParticleOptions(0xB80020, 0.35F);
     private static final DustParticleOptions MAX_CHARGE_DUST = new DustParticleOptions(0xFF2020, 0.75F);
 
-    private static final Map<UUID, Integer> COOLDOWNS = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> CHARGE_STARTS = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> ACTIVE_PROJECTILES = new ConcurrentHashMap<>();
     private static final Set<UUID> SUPPRESSED_COOLDOWN_REMOVALS = ConcurrentHashMap.newKeySet();
@@ -49,7 +48,7 @@ public final class PiercingBloodTechniqueHandler {
             discardForRecast(player, level, activeProjectile);
         }
 
-        int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(playerId);
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
             debug(player, "activate blocked: cooldown=%d", cooldown);
             player.displayClientMessage(
@@ -65,25 +64,6 @@ public final class PiercingBloodTechniqueHandler {
     }
 
     public static void tick(MinecraftServer server) {
-        for (UUID playerId : new ArrayList<>(COOLDOWNS.keySet())) {
-            if (BlueTechniqueHandler.hasNoCooldown(playerId)) {
-                COOLDOWNS.remove(playerId);
-                continue;
-            }
-
-            Integer current = COOLDOWNS.get(playerId);
-            if (current == null) {
-                continue;
-            }
-
-            int next = current - 1;
-            if (next <= 0) {
-                COOLDOWNS.remove(playerId);
-            } else {
-                COOLDOWNS.put(playerId, next);
-            }
-        }
-
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             UUID playerId = player.getUUID();
             ServerLevel level = (ServerLevel) player.level();
@@ -107,7 +87,6 @@ public final class PiercingBloodTechniqueHandler {
     }
 
     public static void clearActive() {
-        COOLDOWNS.clear();
         CHARGE_STARTS.clear();
         ACTIVE_PROJECTILES.clear();
         SUPPRESSED_COOLDOWN_REMOVALS.clear();
@@ -132,12 +111,12 @@ public final class PiercingBloodTechniqueHandler {
             holding,
             CHARGE_STARTS.get(playerId),
             ACTIVE_PROJECTILES.get(playerId),
-            COOLDOWNS.getOrDefault(playerId, 0),
+            TechniqueCooldownManager.getRemaining(playerId),
             player.tickCount
         );
 
         if (holding) {
-            int cooldown = COOLDOWNS.getOrDefault(playerId, 0);
+            int cooldown = TechniqueCooldownManager.getRemaining(playerId);
             if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(playerId)) {
                 debug(player, "onHold(true) blocked by cooldown=%d", cooldown);
                 return;
@@ -181,19 +160,18 @@ public final class PiercingBloodTechniqueHandler {
     public static void onProjectileDied(UUID ownerUUID) {
         ACTIVE_PROJECTILES.remove(ownerUUID);
         if (SUPPRESSED_COOLDOWN_REMOVALS.remove(ownerUUID)) {
-            System.out.println("[PB_DEBUG] onProjectileDied owner=" + ownerUUID + " cooldown suppressed");
             return;
         }
         if (!BlueTechniqueHandler.hasNoCooldown(ownerUUID)) {
-            COOLDOWNS.put(ownerUUID, COOLDOWNS.getOrDefault(ownerUUID, COOLDOWN_TICKS));
+            int current = TechniqueCooldownManager.getRemaining(ownerUUID);
+            TechniqueCooldownManager.set(ownerUUID, Math.max(current, COOLDOWN_TICKS), Math.max(current, COOLDOWN_TICKS));
         } else {
-            COOLDOWNS.remove(ownerUUID);
+            TechniqueCooldownManager.clear(ownerUUID);
         }
-        System.out.println("[PB_DEBUG] onProjectileDied owner=" + ownerUUID + " cooldown=" + COOLDOWNS.getOrDefault(ownerUUID, 0));
     }
 
     public static void clearCooldown(ServerPlayer player) {
-        COOLDOWNS.remove(player.getUUID());
+        TechniqueCooldownManager.clear(player);
     }
 
     private static void cleanupStaleProjectile(ServerPlayer player, ServerLevel level) {
@@ -273,7 +251,7 @@ public final class PiercingBloodTechniqueHandler {
             discardForRecast(player, level, activeProjectile);
         }
 
-        int cooldown = COOLDOWNS.getOrDefault(player.getUUID(), 0);
+        int cooldown = TechniqueCooldownManager.getRemaining(player.getUUID());
         if (cooldown > 0 && !BlueTechniqueHandler.hasNoCooldown(player.getUUID())) {
             debug(player, "spawnReleasedBeam blocked: cooldown=%d", cooldown);
             player.displayClientMessage(
@@ -332,7 +310,6 @@ public final class PiercingBloodTechniqueHandler {
     }
 
     private static void debug(ServerPlayer player, String message, Object... args) {
-        String prefix = player == null ? "unknown" : player.getName().getString();
-        System.out.println("[PB_DEBUG][" + prefix + "] " + String.format(Locale.ROOT, message, args));
+        // Piercing Blood is currently disabled from gameplay; keep the handler silent.
     }
 }
