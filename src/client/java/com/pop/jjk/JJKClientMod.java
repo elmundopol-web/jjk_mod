@@ -440,6 +440,11 @@ public class JJKClientMod implements ClientModInitializer {
             return true;
         }
 
+        if ("piercing_blood".equals(entry.id())) {
+            // Se maneja por input sostenido en handlePiercingBloodHoldInput
+            return true;
+        }
+
         activarTecnicaDesdeHotbar(entry.id(), client);
         return true;
     }

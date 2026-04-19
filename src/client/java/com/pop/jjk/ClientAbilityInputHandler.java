@@ -8,6 +8,7 @@ final class ClientAbilityInputHandler {
     private static boolean blueUseHeld = false;
     private static boolean supernovaUseHeld = false;
     private static boolean fugaUseHeld = false;
+    private static boolean piercingBloodUseHeld = false;
 
     private ClientAbilityInputHandler() {
     }
@@ -16,12 +17,14 @@ final class ClientAbilityInputHandler {
         handleBlueHoldInput(client);
         handleSupernovaHoldInput(client);
         handleFugaHoldInput(client);
+        handlePiercingBloodHoldInput(client);
     }
 
     static void reset() {
         blueUseHeld = false;
         supernovaUseHeld = false;
         fugaUseHeld = false;
+        piercingBloodUseHeld = false;
     }
 
     private static void handleBlueHoldInput(Minecraft client) {
@@ -59,6 +62,26 @@ final class ClientAbilityInputHandler {
             ClientPlayNetworking.send(new SupernovaHoldPayload(false));
         }
         supernovaUseHeld = useDown;
+    }
+
+    private static void handlePiercingBloodHoldInput(Minecraft client) {
+        boolean canInteract = client.player != null && client.screen == null;
+        JJKClientMod.AbilityHotbarEntry entry = JJKClientMod.getSelectedAbilityEntry();
+
+        boolean allowByHotbar = JJKClientMod.shouldCaptureAbilityInput(client)
+            && entry != null
+            && "piercing_blood".equals(entry.id());
+
+        boolean inputDown = client.options.keyAttack.isDown();
+        boolean useDown = canInteract && allowByHotbar && inputDown;
+
+        if (useDown) {
+            ClientPlayNetworking.send(new PiercingBloodHoldPayload(true));
+        }
+        if (!useDown && piercingBloodUseHeld) {
+            ClientPlayNetworking.send(new PiercingBloodHoldPayload(false));
+        }
+        piercingBloodUseHeld = useDown;
     }
 
     private static void handleFugaHoldInput(Minecraft client) {

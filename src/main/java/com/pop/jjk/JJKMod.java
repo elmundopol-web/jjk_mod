@@ -125,6 +125,7 @@ public class JJKMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(CleaveUsePayload.TYPE, CleaveUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(FugaUsePayload.TYPE, FugaUsePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(FugaHoldPayload.TYPE, FugaHoldPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(PiercingBloodHoldPayload.TYPE, PiercingBloodHoldPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(TechniqueSelectionPayload.TYPE, TechniqueSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(CharacterSelectionPayload.TYPE, CharacterSelectionPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(CharacterStatePayload.TYPE, CharacterStatePayload.STREAM_CODEC);
@@ -180,6 +181,9 @@ public class JJKMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(FugaHoldPayload.TYPE, (payload, context) ->
             context.server().execute(() -> FugaTechniqueHandler.onHold(context.player(), payload.holding()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(PiercingBloodHoldPayload.TYPE, (payload, context) ->
+            context.server().execute(() -> PiercingBloodTechniqueHandler.onHold(context.player(), payload.holding()))
+        );
         ServerPlayNetworking.registerGlobalReceiver(TechniqueSelectionPayload.TYPE, (payload, context) ->
             context.server().execute(() -> InfinityTechniqueHandler.setInfinityEnabled(context.player(), payload.infinityEnabled()))
         );
@@ -205,6 +209,7 @@ public class JJKMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> DismantleTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> CleaveTechniqueHandler.tick());
         ServerTickEvents.END_SERVER_TICK.register(server -> FugaTechniqueHandler.tick());
+        ServerTickEvents.END_SERVER_TICK.register(PiercingBloodTechniqueHandler::tick);
         ServerTickEvents.END_SERVER_TICK.register(server -> FugaProjectileEntity.tickPersistentFireZones(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> InfinityTechniqueHandler.tick(server));
         ServerTickEvents.END_SERVER_TICK.register(server -> CursedEnergyManager.tick(server));
@@ -217,6 +222,7 @@ public class JJKMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DismantleTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CleaveTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaTechniqueHandler.clearActive());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> PiercingBloodTechniqueHandler.clearActive());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> FugaProjectileEntity.clearPersistentFireZones());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> InfinityTechniqueHandler.clearAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> CursedEnergyManager.clearAll());
